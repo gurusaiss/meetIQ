@@ -24,6 +24,12 @@ import {
   auditPage,
   layout,
 } from "./render.ts";
+import {
+  notesToMarkdown,
+  flashcardsToAnkiCsv,
+  quizToMarkdown,
+} from "../export/exporters.ts";
+import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
 
 const INSTITUTION_ID = "inst-a";
 const COURSE_ID = "cs101";
@@ -149,6 +155,35 @@ const server = createServer(async (req, res) => {
         if (e instanceof AuthorizationError) return html(layout("Forbidden", `<h1>${e.message}</h1>`), 403);
         throw e;
       }
+    }
+
+    // ── Export (approved assets only) ──
+    m = path.match(/^\/lectures\/([^/]+)\/export\/(notes\.md|flashcards\.csv|quiz\.md)$/);
+    if (method === "GET" && m) {
+      const lectureId = decodeURIComponent(m[1]!);
+      const file = m[2]!;
+      const approved = service.studentAssets(INSTITUTION_ID, lectureId);
+      const download = (body: string, type: string, name: string) => {
+        res.writeHead(200, {
+          "content-type": `${type}; charset=utf-8`,
+          "content-disposition": `attachment; filename="${name}"`,
+        });
+        res.end(body);
+      };
+      if (file === "notes.md") {
+        const a = approved.find((x) => x.type === "notes");
+        if (!a) return html(layout("Not available", "<h1>Notes not released yet</h1>"), 404);
+        return download(notesToMarkdown(lectureId, a.content as RevisionNotes), "text/markdown", `${lectureId}-notes.md`);
+      }
+      if (file === "flashcards.csv") {
+        const a = approved.find((x) => x.type === "flashcards");
+        if (!a) return html(layout("Not available", "<h1>Flashcards not released yet</h1>"), 404);
+        return download(flashcardsToAnkiCsv((a.content as { cards: Flashcard[] }).cards), "text/csv", `${lectureId}-flashcards.csv`);
+      }
+      // quiz.md
+      const a = approved.find((x) => x.type === "quiz");
+      if (!a) return html(layout("Not available", "<h1>Quiz not released yet</h1>"), 404);
+      return download(quizToMarkdown(lectureId, a.content as Quiz), "text/markdown", `${lectureId}-quiz.md`);
     }
 
     // ── Search ──

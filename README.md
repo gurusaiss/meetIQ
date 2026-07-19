@@ -63,7 +63,9 @@ enforced code the tests cover, not a UI reimplementation. Screens:
 - **Faculty review** — assets shown with status badges; **low-confidence
   far-field spans highlighted inline** with "verify" warnings; auto-held banner;
   one-click *Approve & release*. Nothing reaches students unapproved.
-- **Student view** — approved, verified materials only (notes, flashcards, quiz).
+- **Student view** — approved materials only, now **interactive**: click-to-flip
+  flashcards and a self-grading quiz runner (vanilla JS). Plus one-click
+  **exports**: Markdown notes, **Anki-CSV flashcards**, Markdown quiz + answer key.
 - **Search** — "chat with the course" with timestamp citations.
 - **Audit** — the full compliance trail.
 

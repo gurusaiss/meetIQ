@@ -125,7 +125,7 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 - **Inc 1 (done):** value engine core — pipeline + provider abstraction, runnable with mocks, tested.
 - **Inc 2 (done):** persistence + service layer. *Refinement:* used ports-and-adapters — a `Repository` interface with a zero-dep SQLite adapter (built-in `node:sqlite`) for local/dev; Postgres+pgvector becomes a drop-in prod adapter rather than a hard dev dependency (no Docker needed to run). Compliance gate + faculty approval gate + tenant isolation + audit are enforced in the service/repo, not just modeled. Real transcription/LLM providers remain stubs pending API keys.
 - **Inc 3 (done):** web UI — dashboard/create, processing, **faculty review with highlighted low-confidence spans + approve gate**, student view (approved-only), course search with citations, audit page. *Refinement:* shipped as a zero-dep server-rendered app (Node `http`) reusing `LectureService` directly, so the flows are verifiable/runnable now; migrating this presentation layer to Next.js (Phase 10 target) is a mechanical follow-up. Verified end-to-end via HTTP + accessibility-tree inspection.
-- **Inc 4:** student surfaces — notes viewer, flashcard/quiz runner, search/chat.
+- **Inc 4 (done):** student surfaces — interactive flip-card flashcards + self-grading quiz runner (vanilla JS, no framework), plus exports (Markdown notes, **Anki-CSV flashcards**, Markdown quiz with answer key). Exporters are pure/tested; export routes serve approved assets only. 17 tests.
 - **Inc 5:** compliance spine — consent, RBAC, audit, retention; auth/SSO.
 - **Inc 6:** integrations — LMS push, capture-incumbent import; exports.
 - **Inc 7:** hardening — observability, load/scale, security review, SOC 2 path.

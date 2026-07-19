@@ -87,6 +87,16 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
   border-radius:9px;padding:10px 12px;font-size:13px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:640px){.grid{grid-template-columns:1fr}}
+.fc{cursor:pointer}
+.fc .back{display:none}
+.fc.flipped .front{display:none}
+.fc.flipped .back{display:block}
+.opt{display:block;margin:5px 0;padding:7px 11px;border:1px solid var(--line);
+  border-radius:8px;cursor:pointer}
+.opt.correct{background:rgba(15,157,88,.14);border-color:var(--ok)}
+.opt.wrong{background:rgba(192,57,43,.12);border-color:var(--danger)}
+.score{font-weight:700;margin:10px 0}
+.exp{display:none}
 `;
 
 export function layout(title: string, body: string): string {
@@ -224,15 +234,90 @@ export function reviewPage(lecture: Lecture, assets: StoredAsset[]): string {
   );
 }
 
+function renderFlashcardsStudent(cards: Flashcard[]): string {
+  return `<div class="grid">${cards
+    .map(
+      (c) => `<div class="card fc"><div class="muted" style="font-size:13px">Flashcard — click to flip</div>
+      <div class="front" style="margin-top:8px">${esc(c.front)}</div>
+      <div class="back" style="margin-top:8px">${esc(c.back.text)}
+        <div class="cite" style="margin-top:6px">[${c.back.sourceRefs.map(esc).join(", ")}]</div></div></div>`,
+    )
+    .join("")}</div>`;
+}
+
+function renderQuizStudent(q: Quiz): string {
+  const questions = q.questions
+    .map(
+      (qq, i) => `<div class="card" data-answer="${qq.answerIndex}">
+      <strong>Q${i + 1}. ${esc(qq.question)}</strong>
+      ${qq.options
+        .map(
+          (o, j) =>
+            `<label class="opt"><input type="radio" name="sq${i}" value="${j}" style="width:auto;margin-right:8px">${esc(o)}</label>`,
+        )
+        .join("")}
+      <div class="exp cite" style="margin-top:8px">Why: ${esc(qq.explanation.text)} [${qq.explanation.sourceRefs.map(esc).join(", ")}]</div></div>`,
+    )
+    .join("");
+  return `<div data-quiz>${questions}<div class="score"></div><button class="btn" data-check>Check answers</button></div>`;
+}
+
+const STUDENT_SCRIPT = `<script>
+document.addEventListener('click', function(e){
+  var fc = e.target.closest('.fc');
+  if(fc){ fc.classList.toggle('flipped'); return; }
+  if(e.target.matches('[data-check]')){
+    var quiz = e.target.closest('[data-quiz]');
+    var qs = quiz.querySelectorAll('[data-answer]');
+    var correct = 0;
+    qs.forEach(function(q){
+      var ans = +q.getAttribute('data-answer');
+      var opts = q.querySelectorAll('.opt');
+      opts.forEach(function(o){ o.classList.remove('correct','wrong'); });
+      if(opts[ans]) opts[ans].classList.add('correct');
+      var chosen = q.querySelector('input:checked');
+      if(chosen){ var ci = +chosen.value; if(ci===ans){ correct++; } else if(opts[ci]){ opts[ci].classList.add('wrong'); } }
+      var exp = q.querySelector('.exp'); if(exp) exp.style.display='block';
+    });
+    quiz.querySelector('.score').textContent = 'Score: ' + correct + ' / ' + qs.length;
+  }
+});
+</script>`;
+
 export function studentPage(lecture: Lecture, assets: StoredAsset[]): string {
-  const body = assets.length
-    ? assets.map((a) => assetBlock(a, false)).join("<hr style='border:0;border-top:1px solid var(--line);margin:20px 0'>")
-    : `<div class="notice">No materials have been released for this lecture yet. Your instructor reviews and approves them first.</div>`;
+  if (!assets.length) {
+    return layout(
+      "Student view",
+      `<h1>${esc(lecture.id)} — study materials</h1>
+       <p class="sub">Approved, verified materials from your lecture.</p>
+       <div class="notice">No materials have been released for this lecture yet. Your instructor reviews and approves them first.</div>
+       <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
+    );
+  }
+  const base = `/lectures/${encodeURIComponent(lecture.id)}/export`;
+  const blocks = assets
+    .map((a) => {
+      let inner = "";
+      let ex = "";
+      if (a.type === "notes") {
+        inner = renderNotes(a.content as RevisionNotes);
+        ex = `<a class="btn small ghost" href="${base}/notes.md">Export .md</a>`;
+      } else if (a.type === "flashcards") {
+        inner = renderFlashcardsStudent((a.content as { cards: Flashcard[] }).cards);
+        ex = `<a class="btn small ghost" href="${base}/flashcards.csv">Export Anki .csv</a>`;
+      } else {
+        inner = renderQuizStudent(a.content as Quiz);
+        ex = `<a class="btn small ghost" href="${base}/quiz.md">Export .md</a>`;
+      }
+      return `<section><div class="row"><h2>${esc(a.type)}</h2>${ex}</div>${inner}</section>`;
+    })
+    .join("<hr style='border:0;border-top:1px solid var(--line);margin:20px 0'>");
+
   return layout(
     "Student view",
     `<h1>${esc(lecture.id)} — study materials</h1>
      <p class="sub">Approved, verified materials from your lecture.</p>
-     ${body}
+     ${blocks}${STUDENT_SCRIPT}
      <p style="margin-top:24px"><a href="/search">Search this course →</a> · <a href="/">← Dashboard</a></p>`,
   );
 }
