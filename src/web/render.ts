@@ -169,6 +169,13 @@ export function dashboardPage(
         .join("")
     : `<p class="muted">No lectures yet.${canManage ? " Create one below." : ""}</p>`;
 
+  const importCard = canManage
+    ? `<div class="card"><div class="row"><div>
+        <strong>Import from capture system</strong>
+        <div class="kpi">Pull existing recordings from Echo360/Panopto (moat #4). Demo uses a mock source.</div></div>
+        <form method="post" action="/import"><button class="btn small">Import from Echo360 (demo)</button></form></div></div>`
+    : "";
+
   const createCard = canManage
     ? `<div class="card">
       <h2 style="margin-top:0">New lecture</h2>
@@ -193,6 +200,7 @@ export function dashboardPage(
     `<h1>${esc(courseTitle)}</h1>
      <p class="sub">Turn in-person lecture recordings into study-ready, searchable knowledge.</p>
      ${rows}
+     ${importCard}
      ${createCard}`,
     identity,
   );
@@ -270,11 +278,19 @@ export function reviewPage(
   lecture: Lecture,
   assets: StoredAsset[],
   identity: Identity,
+  notice?: string,
 ): string {
+  const approvedCount = assets.filter((a) => a.status === "approved").length;
+  const publishBar = `<div class="card"><div class="row"><div>
+      <strong>Publish to LMS</strong>
+      <div class="kpi">Pushes ${approvedCount} approved asset(s) into Canvas/Moodle (moat #4). Demo uses a mock connector.</div></div>
+      <form method="post" action="/lectures/${encodeURIComponent(lecture.id)}/publish"><button class="btn small" ${approvedCount ? "" : "disabled"}>Publish approved</button></form></div></div>`;
   return layout(
     "Faculty review",
     `<h1>Faculty review — ${esc(lecture.id)}</h1>
      <p class="sub">Nothing reaches students until you approve it. Low-confidence spans from far-field audio are highlighted.</p>
+     ${notice ? `<div class="notice">${esc(notice)}</div>` : ""}
+     ${publishBar}
      ${assets.map((a) => assetBlock(a, true)).join("<hr style='border:0;border-top:1px solid var(--line);margin:20px 0'>")}
      <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
     identity,

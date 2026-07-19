@@ -38,6 +38,8 @@ import {
   quizToMarkdown,
 } from "../export/exporters.ts";
 import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
+import { getCaptureSource } from "../integrations/capture.ts";
+import { MockLmsConnector } from "../integrations/lms.ts";
 
 const INSTITUTION_ID = "inst-a";
 const COURSE_ID = "cs101";
@@ -49,6 +51,10 @@ mkdirSync(dataDir, { recursive: true });
 const repo = new SqliteRepository(dataDir + "lip.sqlite");
 const service = new LectureService(repo);
 const sessions = new SessionStore();
+// One mock LMS connector for the process lifetime so pushes accumulate.
+const lms = new MockLmsConnector();
+// External course identifier as it exists in the LMS/capture system.
+const EXTERNAL_COURSE = "CS101-2026S";
 
 service.seedInstitution(
   {
@@ -168,6 +174,40 @@ const server = createServer(async (req, res) => {
         throw e;
       }
       return redirect(`/lectures/${encodeURIComponent(lectureId)}/review`);
+    }
+
+    // ── Import from capture source (faculty/ta/admin) ──
+    if (method === "POST" && path === "/import") {
+      if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
+      await service.importFromCapture(
+        INSTITUTION_ID,
+        COURSE_ID,
+        getCaptureSource("mock"),
+        EXTERNAL_COURSE,
+        identity,
+      );
+      return redirect("/");
+    }
+
+    // ── Publish approved assets to LMS (faculty/ta/admin) ──
+    m = path.match(/^\/lectures\/([^/]+)\/publish$/);
+    if (method === "POST" && m) {
+      if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
+      const lectureId = decodeURIComponent(m[1]!);
+      const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
+      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity), 404);
+      const count = await service.publishToLms(
+        INSTITUTION_ID,
+        lectureId,
+        lms,
+        EXTERNAL_COURSE,
+        identity,
+      );
+      const notice =
+        count > 0
+          ? `Published ${count} approved asset(s) to the LMS (mock connector). Total pushed this session: ${lms.published.length}.`
+          : `Nothing to publish — approve at least one asset first.`;
+      return html(reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, notice));
     }
 
     // ── Delete lecture (faculty/ta/admin) — right to erasure ──

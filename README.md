@@ -84,6 +84,15 @@ once flows are proven; built runnably first so it can be verified today.
 - **Retention** — admin runs a purge of lectures older than the tenant's
   `retentionDays` (moat #2).
 
+## What's built (Increment 6: integrations — moat #4)
+
+- **Capture import** — pull recordings from Echo360/Panopto/Kaltura as lectures
+  (idempotent; consent seeded from the source). Mock source runs credential-free.
+- **LMS push** — deliver *approved* assets into Canvas/Moodle/Blackboard so
+  students stay in the tool they already use. Mock connector runs credential-free.
+- Both are ports-and-adapters (real vendor adapters are stubs that fail clearly
+  pending credentials), role-gated, and audited.
+
 ## Quick start
 
 ```bash

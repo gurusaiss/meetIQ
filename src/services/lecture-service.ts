@@ -21,6 +21,14 @@ import type {
 import { processLecture as runPipeline } from "../pipeline/pipeline.ts";
 import { search } from "../pipeline/rag.ts";
 import { getEmbeddingsProvider } from "../providers/embeddings/index.ts";
+import type { CaptureSource } from "../integrations/capture.ts";
+import type { LmsConnector, LmsItem } from "../integrations/lms.ts";
+import {
+  notesToMarkdown,
+  flashcardsToAnkiCsv,
+  quizToMarkdown,
+} from "../export/exporters.ts";
+import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
 
 export type Role = "student" | "faculty" | "ta" | "admin";
 export interface Actor {
@@ -198,6 +206,92 @@ export class LectureService {
       }
     }
     return purged;
+  }
+
+  /**
+   * Import recordings from a capture source (Echo360/Panopto/…) as lectures
+   * (moat #4). Consent is seeded from the source's captured-consent flag, so
+   * the downstream compliance gate stays honest. Skips already-imported ids.
+   */
+  async importFromCapture(
+    institutionId: string,
+    courseId: string,
+    source: CaptureSource,
+    externalCourseId: string,
+    actor: Actor,
+  ): Promise<string[]> {
+    if (!["faculty", "ta", "admin"].includes(actor.role)) {
+      throw new AuthorizationError(`Role ${actor.role} cannot import recordings.`);
+    }
+    const recordings = await source.listRecordings(externalCourseId);
+    const imported: string[] = [];
+    for (const rec of recordings) {
+      const lectureId = rec.externalId.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      if (this.repo.getLecture(institutionId, lectureId)) continue; // idempotent
+      this.createLecture({
+        institutionId,
+        courseId,
+        lectureId,
+        mediaRef: rec.mediaRef,
+        captureSource: source.name,
+        consent: { noticeShown: rec.consentCaptured },
+      });
+      this.audit(institutionId, actor.id, "lecture.imported", lectureId);
+      imported.push(lectureId);
+    }
+    return imported;
+  }
+
+  /**
+   * Push approved assets to the LMS (moat #4). Only approved assets are sent —
+   * the faculty gate extends to LMS delivery. Returns the number pushed.
+   */
+  async publishToLms(
+    institutionId: string,
+    lectureId: string,
+    connector: LmsConnector,
+    externalCourseId: string,
+    actor: Actor,
+  ): Promise<number> {
+    if (!["faculty", "ta", "admin"].includes(actor.role)) {
+      throw new AuthorizationError(`Role ${actor.role} cannot publish to the LMS.`);
+    }
+    const approved = this.repo
+      .listAssets(institutionId, lectureId)
+      .filter((a) => a.status === "approved");
+
+    const items: LmsItem[] = approved.map((a) => {
+      if (a.type === "notes") {
+        return {
+          lectureId,
+          type: "notes",
+          title: `${lectureId} — Revision Notes`,
+          body: notesToMarkdown(lectureId, a.content as RevisionNotes),
+          contentType: "text/markdown",
+        };
+      }
+      if (a.type === "flashcards") {
+        return {
+          lectureId,
+          type: "flashcards",
+          title: `${lectureId} — Flashcards`,
+          body: flashcardsToAnkiCsv((a.content as { cards: Flashcard[] }).cards),
+          contentType: "text/csv",
+        };
+      }
+      return {
+        lectureId,
+        type: "quiz",
+        title: `${lectureId} — Quiz`,
+        body: quizToMarkdown(lectureId, a.content as Quiz),
+        contentType: "text/markdown",
+      };
+    });
+
+    if (items.length === 0) return 0;
+    const count = await connector.publish(externalCourseId, items);
+    this.audit(institutionId, actor.id, "lms.published", `${lectureId} (${count} items)`);
+    return count;
   }
 
   private audit(institutionId: string, actor: string, action: string, target: string): void {
