@@ -1,0 +1,27 @@
+{
+  "name": "lecture-intelligence-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Compliant AI layer that turns in-person lecture recordings into study-ready, searchable knowledge.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "demo": "node --experimental-strip-types src/demo.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "lecture-capture",
+    "meeting-intelligence",
+    "rag",
+    "education",
+    "ai"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.6.0"
+  }
+}

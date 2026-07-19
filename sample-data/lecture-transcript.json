@@ -1,0 +1,86 @@
+{
+  "language": "en",
+  "note": "Fixture simulating a far-field lecture recording. Segments seg-3 and seg-8 have low confidence to mimic reverberant/distant audio (moat #1).",
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 7.5,
+      "speaker": "SPEAKER_0",
+      "text": "Today we are going to talk about hash tables, one of the most important data structures in computer science.",
+      "confidence": 0.97
+    },
+    {
+      "id": "seg-1",
+      "start": 7.6,
+      "end": 15.2,
+      "speaker": "SPEAKER_0",
+      "text": "A hash table is a structure that maps keys to values using a hash function to compute an index into an array of buckets.",
+      "confidence": 0.95
+    },
+    {
+      "id": "seg-2",
+      "start": 15.3,
+      "end": 22.0,
+      "speaker": "SPEAKER_0",
+      "text": "The average time complexity for lookups, insertions, and deletions is constant, or O of one.",
+      "confidence": 0.92
+    },
+    {
+      "id": "seg-3",
+      "start": 31.0,
+      "end": 39.4,
+      "speaker": "SPEAKER_0",
+      "text": "When two keys hash to the same bucket we get what is called a collision and we need a strategy to resolve it.",
+      "confidence": 0.58
+    },
+    {
+      "id": "seg-4",
+      "start": 39.5,
+      "end": 47.8,
+      "speaker": "SPEAKER_0",
+      "text": "The two main collision resolution strategies are separate chaining and open addressing.",
+      "confidence": 0.9
+    },
+    {
+      "id": "seg-5",
+      "start": 47.9,
+      "end": 56.1,
+      "speaker": "SPEAKER_0",
+      "text": "Separate chaining stores a linked list at each bucket so multiple entries can share the same index.",
+      "confidence": 0.93
+    },
+    {
+      "id": "seg-6",
+      "start": 65.0,
+      "end": 72.3,
+      "speaker": "SPEAKER_1",
+      "text": "Professor, what happens to performance when the load factor gets too high?",
+      "confidence": 0.88
+    },
+    {
+      "id": "seg-7",
+      "start": 72.4,
+      "end": 82.0,
+      "speaker": "SPEAKER_0",
+      "text": "Great question. When the load factor exceeds a threshold we resize the table and rehash all the entries to keep operations fast.",
+      "confidence": 0.91
+    },
+    {
+      "id": "seg-8",
+      "start": 82.1,
+      "end": 90.5,
+      "speaker": "SPEAKER_0",
+      "text": "A good hash function distributes keys uniformly to minimize clustering and keep collisions rare.",
+      "confidence": 0.61
+    },
+    {
+      "id": "seg-9",
+      "start": 90.6,
+      "end": 98.0,
+      "speaker": "SPEAKER_0",
+      "text": "In summary, hash tables give you fast average-case access at the cost of worst-case guarantees and extra memory.",
+      "confidence": 0.94
+    }
+  ]
+}
