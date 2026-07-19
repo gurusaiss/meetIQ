@@ -36,12 +36,30 @@ It's the heart of the product and the home of the two hardest moats:
   segment ids. The pipeline validates those ids — an LLM cannot fake grounding.
   Ungrounded statements are dropped (quiz/flashcards) or excluded (notes).
 
+## What's built (Increment 2: persistence + service layer)
+
+The pipeline output now survives, and two moats become *enforced rules* rather
+than data fields, via a **ports-and-adapters** design (a `Repository` interface
+with a zero-dependency adapter on Node's built-in SQLite; Postgres+pgvector is
+the drop-in prod adapter):
+
+- **Compliance gate (moat #2):** an all-party-consent tenant cannot process a
+  lecture until a consent notice is recorded — `processLecture` throws otherwise.
+- **Faculty approval gate (FR-14):** only faculty/TA can approve an asset;
+  students only ever see `approved` assets.
+- **Tenant isolation:** every query is scoped by `institution_id`; a wrong-tenant
+  id returns nothing (tested).
+- **Audit trail:** every state change is logged for the security/privacy officer.
+- **Persisted course search:** "chat with the course" runs over stored chunks
+  with timestamp citations.
+
 ## Quick start
 
 ```bash
-# no install needed to run — mock providers, Node 22+ strips the TS
-npm run demo     # end-to-end run on the sample far-field lecture
-npm test         # unit + integration tests (6 tests)
+# no install needed to run — mock providers + built-in SQLite, Node 22+ strips the TS
+npm run demo          # value-engine pipeline on the sample far-field lecture
+npm run demo:service  # full institutional lifecycle (consent→process→approve→search→audit)
+npm test              # 14 tests (pipeline + persistence + gates + isolation)
 
 # optional, for the type layer:
 npm install
@@ -75,7 +93,13 @@ src/
     assets.ts              notes + flashcards + quiz, with quality gates
     rag.ts                 chunking + semantic search with citations
     pipeline.ts            orchestrator
-  demo.ts                  runnable end-to-end demo
+  persistence/
+    repository.ts          Repository PORT (tenant-scoped interface)
+    sqlite.ts              zero-dep adapter (built-in node:sqlite)
+  services/
+    lecture-service.ts     lifecycle + compliance gate + faculty approval + audit
+  demo.ts                  value-engine demo
+  demo-service.ts          full institutional lifecycle demo
 sample-data/               far-field lecture fixture (has low-confidence segments)
 test/                      node:test suite
 ```

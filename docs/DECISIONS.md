@@ -122,8 +122,8 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 
 ## Phase 12 — Implementation Roadmap (increments)
 
-- **Inc 1 (this):** value engine core — pipeline + provider abstraction, runnable with mocks, tested. ← *building now*
-- **Inc 2:** persistence (Prisma/Postgres/pgvector) + real providers wired.
+- **Inc 1 (done):** value engine core — pipeline + provider abstraction, runnable with mocks, tested.
+- **Inc 2 (done):** persistence + service layer. *Refinement:* used ports-and-adapters — a `Repository` interface with a zero-dep SQLite adapter (built-in `node:sqlite`) for local/dev; Postgres+pgvector becomes a drop-in prod adapter rather than a hard dev dependency (no Docker needed to run). Compliance gate + faculty approval gate + tenant isolation + audit are enforced in the service/repo, not just modeled. Real transcription/LLM providers remain stubs pending API keys.
 - **Inc 3:** Next.js app — upload, processing status, faculty review/approve.
 - **Inc 4:** student surfaces — notes viewer, flashcard/quiz runner, search/chat.
 - **Inc 5:** compliance spine — consent, RBAC, audit, retention; auth/SSO.
