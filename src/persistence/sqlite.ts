@@ -134,15 +134,23 @@ export class SqliteRepository implements Repository {
         `SELECT * FROM lectures WHERE course_id=? AND institution_id=? ORDER BY created_at`,
       )
       .all(courseId, institutionId) as Record<string, unknown>[];
-    return rows.map((r) => ({
-      id: r.id as string,
-      institutionId: r.institution_id as string,
-      courseId: r.course_id as string,
-      mediaRef: r.media_ref as string,
-      status: r.status as LectureStatus,
-      captureSource: r.capture_source as string,
-      createdAt: r.created_at as string,
-    }));
+    return rows.map(rowToLecture);
+  }
+
+  listLectures(institutionId: string): Lecture[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM lectures WHERE institution_id=? ORDER BY created_at`)
+      .all(institutionId) as Record<string, unknown>[];
+    return rows.map(rowToLecture);
+  }
+
+  deleteLecture(institutionId: string, lectureId: string): void {
+    for (const table of ["assets", "chunks", "transcripts", "consent", "lectures"]) {
+      const col = table === "lectures" ? "id" : "lecture_id";
+      this.db
+        .prepare(`DELETE FROM ${table} WHERE ${col}=? AND institution_id=?`)
+        .run(lectureId, institutionId);
+    }
   }
 
   getLecture(institutionId: string, lectureId: string): Lecture | null {
@@ -319,6 +327,18 @@ export class SqliteRepository implements Repository {
   close(): void {
     this.db.close();
   }
+}
+
+function rowToLecture(r: Record<string, unknown>): Lecture {
+  return {
+    id: r.id as string,
+    institutionId: r.institution_id as string,
+    courseId: r.course_id as string,
+    mediaRef: r.media_ref as string,
+    status: r.status as LectureStatus,
+    captureSource: r.capture_source as string,
+    createdAt: r.created_at as string,
+  };
 }
 
 function rowToAsset(r: Record<string, unknown>): StoredAsset {

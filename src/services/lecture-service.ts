@@ -166,6 +166,40 @@ export class LectureService {
     return search(embeddings, chunks, query, topK);
   }
 
+  /** Right-to-erasure. Faculty/TA/admin only. Removes all derived data. */
+  deleteLecture(institutionId: string, lectureId: string, actor: Actor): void {
+    if (!["faculty", "ta", "admin"].includes(actor.role)) {
+      throw new AuthorizationError(`Role ${actor.role} cannot delete lectures.`);
+    }
+    if (!this.repo.getLecture(institutionId, lectureId)) {
+      throw new Error(`Lecture ${lectureId} not found`);
+    }
+    this.repo.deleteLecture(institutionId, lectureId);
+    this.audit(institutionId, actor.id, "lecture.deleted", lectureId);
+  }
+
+  /**
+   * Retention enforcement (moat #2). Deletes lectures older than the tenant's
+   * retentionDays. Admin only. `now` is injected for testability.
+   */
+  runRetention(institutionId: string, actor: Actor, now: Date = new Date()): number {
+    if (actor.role !== "admin") {
+      throw new AuthorizationError(`Role ${actor.role} cannot run retention.`);
+    }
+    const inst = this.repo.getInstitution(institutionId);
+    if (!inst) throw new Error(`Unknown institution ${institutionId}`);
+    const cutoff = new Date(now.getTime() - inst.retentionDays * 86_400_000).toISOString();
+    let purged = 0;
+    for (const l of this.repo.listLectures(institutionId)) {
+      if (l.createdAt < cutoff) {
+        this.repo.deleteLecture(institutionId, l.id);
+        this.audit(institutionId, actor.id, "lecture.purged", l.id);
+        purged++;
+      }
+    }
+    return purged;
+  }
+
   private audit(institutionId: string, actor: string, action: string, target: string): void {
     this.repo.audit({
       institutionId,

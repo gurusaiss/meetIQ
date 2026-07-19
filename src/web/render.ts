@@ -12,6 +12,7 @@ import type {
   SearchHit,
 } from "../types.ts";
 import type { AuditEvent } from "../persistence/repository.ts";
+import type { Identity } from "../auth/session.ts";
 import { config } from "../config.ts";
 
 export function esc(s: string): string {
@@ -99,14 +100,41 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .exp{display:none}
 `;
 
-export function layout(title: string, body: string): string {
+export function layout(title: string, body: string, identity?: Identity | null): string {
+  let nav = "";
+  if (identity) {
+    const adminLink = identity.role === "admin" ? `<a href="/audit">Audit</a>` : "";
+    nav = `<nav><a href="/">Dashboard</a><a href="/search">Search</a>${adminLink}
+      <span class="chip" style="margin-left:16px">${esc(identity.name)} · ${esc(identity.role)}</span>
+      <form method="post" action="/logout" style="display:inline;margin-left:8px">
+        <button class="btn small ghost">Sign out</button></form></nav>`;
+  }
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · Lecture Intelligence</title><style>${CSS}</style></head>
 <body>
-<header class="top"><div class="brand">📚 Lecture Intelligence</div>
-<nav><a href="/">Dashboard</a><a href="/search">Search</a><a href="/audit">Audit</a></nav></header>
+<header class="top"><div class="brand">📚 Lecture Intelligence</div>${nav}</header>
 <div class="wrap">${body}</div></body></html>`;
+}
+
+export function loginPage(error?: string): string {
+  return layout(
+    "Sign in",
+    `<h1>Sign in</h1>
+     <p class="sub">In production this is your institution's SSO (SAML / LMS LTI). For this demo, choose an identity.</p>
+     ${error ? `<div class="notice">${esc(error)}</div>` : ""}
+     <div class="card"><form method="post" action="/login">
+       <label>Name</label><input name="name" value="Anika Rao" required>
+       <label>Role</label>
+       <select name="role">
+         <option value="faculty">faculty — record, review, approve, delete</option>
+         <option value="ta">ta — review &amp; approve</option>
+         <option value="student">student — study approved materials</option>
+         <option value="admin">admin — audit &amp; retention</option>
+       </select>
+       <div style="margin-top:14px"><button class="btn">Sign in</button></div>
+     </form></div>`,
+  );
 }
 
 function statusBadge(s: string): string {
@@ -115,29 +143,34 @@ function statusBadge(s: string): string {
   return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
-export function dashboardPage(courseTitle: string, lectures: Lecture[]): string {
+export function dashboardPage(
+  courseTitle: string,
+  lectures: Lecture[],
+  identity: Identity,
+): string {
+  const canManage = ["faculty", "ta", "admin"].includes(identity.role);
   const rows = lectures.length
     ? lectures
-        .map(
-          (l) => `<div class="card"><div class="row">
+        .map((l) => {
+          const del = ["faculty", "ta", "admin"].includes(identity.role)
+            ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/delete" style="display:inline" onsubmit="return confirm('Delete ${esc(l.id)} and all derived data?')"><button class="btn small ghost">Delete</button></form>`
+            : "";
+          const actions =
+            l.status === "created"
+              ? (canManage
+                  ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/process" style="display:inline"><button class="btn small">Process</button></form> `
+                  : "") + del
+              : `${canManage ? `<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/review">Faculty review</a> ` : ""}<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/student">Student view</a> ${del}`;
+          return `<div class="card"><div class="row">
         <div><strong>${esc(l.id)}</strong> <span class="chip">${esc(l.captureSource)}</span>
           <div class="kpi">status: ${esc(l.status)} · created ${esc(l.createdAt.slice(0, 16).replace("T", " "))}</div></div>
-        <div>${
-          l.status === "created"
-            ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/process" style="display:inline"><button class="btn small">Process</button></form>`
-            : `<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/review">Faculty review</a>
-               <a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/student">Student view</a>`
-        }</div></div></div>`,
-        )
+        <div>${actions}</div></div></div>`;
+        })
         .join("")
-    : `<p class="muted">No lectures yet. Create one below.</p>`;
+    : `<p class="muted">No lectures yet.${canManage ? " Create one below." : ""}</p>`;
 
-  return layout(
-    "Dashboard",
-    `<h1>${esc(courseTitle)}</h1>
-     <p class="sub">Turn in-person lecture recordings into study-ready, searchable knowledge.</p>
-     ${rows}
-     <div class="card">
+  const createCard = canManage
+    ? `<div class="card">
       <h2 style="margin-top:0">New lecture</h2>
       <form method="post" action="/lectures">
         <label>Lecture id</label>
@@ -152,7 +185,16 @@ export function dashboardPage(courseTitle: string, lectures: Lecture[]): string 
         <label style="margin-top:12px"><input type="checkbox" name="noticeShown" checked style="width:auto"> Recording-consent notice was shown to the room (required in all-party-consent regions)</label>
         <div style="margin-top:14px"><button class="btn">Create lecture</button></div>
       </form>
-     </div>`,
+     </div>`
+    : "";
+
+  return layout(
+    "Dashboard",
+    `<h1>${esc(courseTitle)}</h1>
+     <p class="sub">Turn in-person lecture recordings into study-ready, searchable knowledge.</p>
+     ${rows}
+     ${createCard}`,
+    identity,
   );
 }
 
@@ -224,13 +266,18 @@ function assetBlock(a: StoredAsset, showApprove: boolean): string {
     ${heldNote}${inner}</section>`;
 }
 
-export function reviewPage(lecture: Lecture, assets: StoredAsset[]): string {
+export function reviewPage(
+  lecture: Lecture,
+  assets: StoredAsset[],
+  identity: Identity,
+): string {
   return layout(
     "Faculty review",
     `<h1>Faculty review — ${esc(lecture.id)}</h1>
      <p class="sub">Nothing reaches students until you approve it. Low-confidence spans from far-field audio are highlighted.</p>
      ${assets.map((a) => assetBlock(a, true)).join("<hr style='border:0;border-top:1px solid var(--line);margin:20px 0'>")}
      <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
+    identity,
   );
 }
 
@@ -284,7 +331,11 @@ document.addEventListener('click', function(e){
 });
 </script>`;
 
-export function studentPage(lecture: Lecture, assets: StoredAsset[]): string {
+export function studentPage(
+  lecture: Lecture,
+  assets: StoredAsset[],
+  identity: Identity,
+): string {
   if (!assets.length) {
     return layout(
       "Student view",
@@ -292,6 +343,7 @@ export function studentPage(lecture: Lecture, assets: StoredAsset[]): string {
        <p class="sub">Approved, verified materials from your lecture.</p>
        <div class="notice">No materials have been released for this lecture yet. Your instructor reviews and approves them first.</div>
        <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
+      identity,
     );
   }
   const base = `/lectures/${encodeURIComponent(lecture.id)}/export`;
@@ -319,10 +371,11 @@ export function studentPage(lecture: Lecture, assets: StoredAsset[]): string {
      <p class="sub">Approved, verified materials from your lecture.</p>
      ${blocks}${STUDENT_SCRIPT}
      <p style="margin-top:24px"><a href="/search">Search this course →</a> · <a href="/">← Dashboard</a></p>`,
+    identity,
   );
 }
 
-export function searchPage(query: string, hits: SearchHit[]): string {
+export function searchPage(query: string, hits: SearchHit[], identity: Identity): string {
   const results = query
     ? hits.length
       ? hits
@@ -341,10 +394,15 @@ export function searchPage(query: string, hits: SearchHit[]): string {
        <input name="q" value="${esc(query)}" placeholder="e.g. How are collisions handled?" style="flex:1">
        <button class="btn">Search</button></div></form>
      <div style="margin-top:16px">${results}</div>`,
+    identity,
   );
 }
 
-export function auditPage(events: AuditEvent[]): string {
+export function auditPage(
+  events: AuditEvent[],
+  identity: Identity,
+  retentionDays: number,
+): string {
   const rows = events
     .map(
       (e) =>
@@ -355,8 +413,13 @@ export function auditPage(events: AuditEvent[]): string {
     "Audit",
     `<h1>Audit trail</h1>
      <p class="sub">Every compliance-relevant action, for the security &amp; privacy officer.</p>
+     <div class="card"><div class="row"><div>
+       <strong>Data retention</strong>
+       <div class="kpi">Tenant policy: delete lectures older than ${retentionDays} days.</div></div>
+       <form method="post" action="/admin/retention"><button class="btn small">Run retention now</button></form></div></div>
      <div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
      <tbody>${rows || '<tr><td colspan="4" class="muted">No events yet.</td></tr>'}</tbody></table></div>`,
+    identity,
   );
 }
 

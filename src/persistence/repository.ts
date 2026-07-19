@@ -76,6 +76,9 @@ export interface Repository {
   setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): void;
   getLecture(institutionId: string, lectureId: string): Lecture | null;
   listLecturesByCourse(institutionId: string, courseId: string): Lecture[];
+  listLectures(institutionId: string): Lecture[];
+  /** Right-to-erasure: removes the lecture and ALL derived data. */
+  deleteLecture(institutionId: string, lectureId: string): void;
 
   // consent (moat #2)
   saveConsent(c: ConsentRecord): void;

@@ -67,10 +67,22 @@ enforced code the tests cover, not a UI reimplementation. Screens:
   flashcards and a self-grading quiz runner (vanilla JS). Plus one-click
   **exports**: Markdown notes, **Anki-CSV flashcards**, Markdown quiz + answer key.
 - **Search** — "chat with the course" with timestamp citations.
-- **Audit** — the full compliance trail.
+- **Audit** — the full compliance trail (admin only).
 
 Theme-aware (light/dark), responsive. Migrates to Next.js (the Phase 10 target)
 once flows are proven; built runnably first so it can be verified today.
+
+## What's built (Increment 5: auth + RBAC + retention)
+
+- **Sign-in / sessions** — a `/login` identity chooser standing in for SSO
+  (SAML/LTI is the drop-in prod adapter behind the same `Session` shape).
+- **Role-based access** on every route: students can't create/process/approve
+  or see the audit log (403); faculty/TA review & approve; admin runs audit +
+  retention. Enforced in both the service and the web layer.
+- **Right-to-erasure** — faculty/admin can delete a lecture and *all* derived
+  data (transcript, assets, chunks, consent).
+- **Retention** — admin runs a purge of lectures older than the tenant's
+  `retentionDays` (moat #2).
 
 ## Quick start
 
