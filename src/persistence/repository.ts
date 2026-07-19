@@ -75,6 +75,7 @@ export interface Repository {
   createLecture(l: Lecture): void;
   setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): void;
   getLecture(institutionId: string, lectureId: string): Lecture | null;
+  listLecturesByCourse(institutionId: string, courseId: string): Lecture[];
 
   // consent (moat #2)
   saveConsent(c: ConsentRecord): void;

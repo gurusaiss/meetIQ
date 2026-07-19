@@ -10,6 +10,7 @@
   "scripts": {
     "demo": "node --experimental-strip-types src/demo.ts",
     "demo:service": "node --experimental-strip-types src/demo-service.ts",
+    "web": "node --experimental-strip-types src/web/server.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

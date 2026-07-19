@@ -128,6 +128,23 @@ export class SqliteRepository implements Repository {
       .run(status, lectureId, institutionId);
   }
 
+  listLecturesByCourse(institutionId: string, courseId: string): Lecture[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM lectures WHERE course_id=? AND institution_id=? ORDER BY created_at`,
+      )
+      .all(courseId, institutionId) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      institutionId: r.institution_id as string,
+      courseId: r.course_id as string,
+      mediaRef: r.media_ref as string,
+      status: r.status as LectureStatus,
+      captureSource: r.capture_source as string,
+      createdAt: r.created_at as string,
+    }));
+  }
+
   getLecture(institutionId: string, lectureId: string): Lecture | null {
     const r = this.db
       .prepare(`SELECT * FROM lectures WHERE id=? AND institution_id=?`)

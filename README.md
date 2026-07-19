@@ -53,10 +53,28 @@ the drop-in prod adapter):
 - **Persisted course search:** "chat with the course" runs over stored chunks
   with timestamp citations.
 
+## What's built (Increment 3: the clickable web UI)
+
+A server-rendered web app (zero-dependency, on Node's built-in `http`) that
+**reuses `LectureService` directly** — so the gates you click are the same
+enforced code the tests cover, not a UI reimplementation. Screens:
+
+- **Dashboard** — create a lecture (with a consent checkbox), process it.
+- **Faculty review** — assets shown with status badges; **low-confidence
+  far-field spans highlighted inline** with "verify" warnings; auto-held banner;
+  one-click *Approve & release*. Nothing reaches students unapproved.
+- **Student view** — approved, verified materials only (notes, flashcards, quiz).
+- **Search** — "chat with the course" with timestamp citations.
+- **Audit** — the full compliance trail.
+
+Theme-aware (light/dark), responsive. Migrates to Next.js (the Phase 10 target)
+once flows are proven; built runnably first so it can be verified today.
+
 ## Quick start
 
 ```bash
 # no install needed to run — mock providers + built-in SQLite, Node 22+ strips the TS
+npm run web           # ← the app at http://localhost:3000
 npm run demo          # value-engine pipeline on the sample far-field lecture
 npm run demo:service  # full institutional lifecycle (consent→process→approve→search→audit)
 npm test              # 14 tests (pipeline + persistence + gates + isolation)
