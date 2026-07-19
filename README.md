@@ -117,14 +117,24 @@ npm run typecheck
 ```
 
 ### Using real providers
-Copy `.env.example` → `.env` and set, e.g.:
+The real engines are implemented (AssemblyAI transcription via `fetch`; Claude
+generation via the official `@anthropic-ai/sdk` with structured outputs, model
+read from `LLM_MODEL`). Copy `.env.example` → `.env` and set:
 ```
 TRANSCRIPTION_PROVIDER=assemblyai
 ASSEMBLYAI_API_KEY=...
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=...
+LLM_MODEL=claude-sonnet-5   # or claude-opus-4-8
 ```
-(The real provider bodies land in Increment 2; the contracts are already stable.)
+The Claude provider requires the model to cite transcript segment ids for every
+generated statement; the pipeline's grounding guard then validates them, so the
+hallucination guard protects the real path exactly as it does the mock path.
+Mock stays the default and loads no SDK (the SDK is dynamic-import-gated).
+
+> Status: the real provider bodies are implemented against the current APIs and
+> typecheck clean, but have **not** yet been exercised against the live services
+> in this repo (no API keys here). Add keys to smoke-test end-to-end.
 
 ## Layout
 
