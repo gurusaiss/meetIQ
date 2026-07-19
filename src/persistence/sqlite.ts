@@ -324,6 +324,15 @@ export class SqliteRepository implements Repository {
     }));
   }
 
+  healthcheck(): boolean {
+    try {
+      const r = this.db.prepare("SELECT 1 AS ok").get() as { ok: number } | undefined;
+      return r?.ok === 1;
+    } catch {
+      return false;
+    }
+  }
+
   close(): void {
     this.db.close();
   }

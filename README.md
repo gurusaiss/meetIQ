@@ -93,6 +93,15 @@ once flows are proven; built runnably first so it can be verified today.
 - Both are ports-and-adapters (real vendor adapters are stubs that fail clearly
   pending credentials), role-gated, and audited.
 
+## What's built (Increment 7: hardening & observability)
+
+- **Structured JSON logging** with per-request correlation ids (`x-request-id`).
+- **Startup config validation** — bad provider names, out-of-range thresholds, or
+  a real provider selected without its key fail fast with a clear message.
+- **Health probes** — `GET /healthz` / `/readyz` check the datastore.
+- **Graceful shutdown** on SIGTERM/SIGINT (the container path) and SIGBREAK.
+- 500 responses no longer leak internal error details to clients.
+
 ## Quick start
 
 ```bash

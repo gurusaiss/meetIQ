@@ -9,6 +9,9 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import { validateConfig } from "../config.ts";
+import { logger } from "../observability/logger.ts";
 import { SqliteRepository } from "../persistence/sqlite.ts";
 import {
   LectureService,
@@ -45,6 +48,13 @@ const INSTITUTION_ID = "inst-a";
 const COURSE_ID = "cs101";
 const COURSE_TITLE = "CS101 · Data Structures";
 const ROLES: Role[] = ["student", "faculty", "ta", "admin"];
+
+// Fail fast on bad configuration rather than mid-request.
+const configErrors = validateConfig();
+if (configErrors.length) {
+  logger.error("Invalid configuration; refusing to start", { errors: configErrors });
+  process.exit(1);
+}
 
 const dataDir = fileURLToPath(new URL("../../data/", import.meta.url));
 mkdirSync(dataDir, { recursive: true });
@@ -85,6 +95,23 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
   const method = req.method ?? "GET";
+
+  // Request logging with a correlation id.
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  const log = logger.child({ requestId });
+  res.setHeader("x-request-id", requestId);
+  res.on("finish", () => {
+    log.info("request", { method, path, status: res.statusCode, ms: Date.now() - startedAt });
+  });
+
+  // Liveness/readiness probe — no auth, checks the datastore.
+  if (method === "GET" && (path === "/healthz" || path === "/readyz")) {
+    const dbOk = repo.healthcheck();
+    res.writeHead(dbOk ? 200 : 503, { "content-type": "application/json" });
+    res.end(JSON.stringify({ status: dbOk ? "ok" : "degraded", db: dbOk ? "ok" : "down" }));
+    return;
+  }
 
   const html = (body: string, code = 200, headers: Record<string, string> = {}) => {
     res.writeHead(code, { "content-type": "text/html; charset=utf-8", ...headers });
@@ -309,12 +336,31 @@ const server = createServer(async (req, res) => {
 
     return html(layout("Not found", "<h1>404</h1><p><a href='/'>Dashboard</a></p>", identity), 404);
   } catch (err) {
+    log.error("unhandled request error", { method, path, error: (err as Error).message });
     res.writeHead(500, { "content-type": "text/html; charset=utf-8" });
-    res.end(layout("Error", `<h1>Server error</h1><pre>${(err as Error).message}</pre>`));
+    res.end(layout("Error", "<h1>Server error</h1><p>An unexpected error occurred. It has been logged.</p>"));
   }
 });
 
 const PORT = Number(process.env.PORT ?? 3000);
 server.listen(PORT, () => {
-  console.log(`Lecture Intelligence UI → http://localhost:${PORT}`);
+  logger.info("server.listening", { url: `http://localhost:${PORT}` });
 });
+
+// Graceful shutdown — stop accepting connections, then close the datastore.
+// SIGTERM is the container/orchestrator signal (the prod path); SIGINT is
+// Ctrl+C; SIGBREAK covers Windows consoles.
+let shuttingDown = false;
+for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"] as const) {
+  process.on(sig, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info("server.shutdown", { signal: sig });
+    server.close(() => {
+      repo.close();
+      process.exit(0);
+    });
+    // Safety net if connections hang.
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}

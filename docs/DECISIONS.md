@@ -128,7 +128,7 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 - **Inc 4 (done):** student surfaces — interactive flip-card flashcards + self-grading quiz runner (vanilla JS, no framework), plus exports (Markdown notes, **Anki-CSV flashcards**, Markdown quiz with answer key). Exporters are pure/tested; export routes serve approved assets only. 17 tests.
 - **Inc 5 (done):** auth + RBAC + retention/erasure. Session/identity layer (dev login now; SAML/LTI adapter later, same `Session` shape). Every route role-gated (student can't create/approve/audit; admin-only audit + retention). Right-to-erasure delete removes lecture + all derived data; retention purges lectures past `retentionDays`. 24 tests; RBAC verified over HTTP.
 - **Inc 6 (done):** integrations (moat #4) — capture-source import (Echo360/Panopto/Kaltura) + LMS push (Canvas/Moodle/Blackboard), ports-and-adapters with tested mock adapters and clearly-failing real stubs. Import is idempotent + seeds consent from the source; LMS push sends approved assets only; both audited. 30 tests; flows verified over HTTP.
-- **Inc 7:** hardening — observability, load/scale, security review, SOC 2 path.
+- **Inc 7 (done):** hardening/observability — structured JSON logging (pure, tested formatter), request logging with correlation ids (`x-request-id`), startup config validation (fail-fast with clear errors + required-key checks), `/healthz` + `/readyz` datastore probes, graceful shutdown (SIGTERM/SIGINT/SIGBREAK), and 500s no longer leak internal error detail to clients. 36 tests; runtime behaviors verified over HTTP.
 
 ---
 

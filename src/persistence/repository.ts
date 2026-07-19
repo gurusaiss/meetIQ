@@ -101,5 +101,7 @@ export interface Repository {
   audit(e: AuditEvent): void;
   listAudit(institutionId: string): AuditEvent[];
 
+  /** Liveness probe — true if the store answers a trivial query. */
+  healthcheck(): boolean;
   close(): void;
 }
