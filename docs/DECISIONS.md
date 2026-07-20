@@ -136,7 +136,7 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 ## Phase 13 — Testing Strategy
 
 - Unit: pipeline stages + providers (mock-driven, deterministic).
-- Golden-set: a labeled far-field transcript → assert grounding + confidence behavior.
+- Golden-set: a labeled far-field transcript → assert grounding + confidence behavior. **DONE** — `test/quality-gates.test.ts` drives the asset builder with controlled confidence profiles and pins the moat-#1 gates: clean audio stays draft, all-low-confidence auto-holds, the flag threshold and auto-hold ratio are honored at their boundaries, a hallucinated citation holds the asset even on clean audio, and no ungrounded content ever ships. 44 tests total.
 - Integration: enqueue→process→persist.
 - E2E: upload→approve→student search.
 - Quality gates (NFR-1): WER/DER thresholds auto-hold assets for review.
