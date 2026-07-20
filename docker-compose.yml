@@ -1,0 +1,40 @@
+# Local/pilot deployment. The app runs self-contained on the built-in SQLite
+# store (moat #2 tenant isolation still applies). The postgres/redis/minio
+# services below are scaffolded for the production adapters (Phase 12 Inc 2+):
+# uncomment and set REPO_DRIVER=postgres once the pgvector adapter lands.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DATA_DIR: /data
+      # Providers default to mock; set real ones via a .env file / secrets:
+      # TRANSCRIPTION_PROVIDER: assemblyai
+      # ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+      # LLM_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # LLM_MODEL: claude-sonnet-5
+    volumes:
+      - lip-data:/data
+    restart: unless-stopped
+
+  # ── Future production dependencies (not yet wired) ──────────────────
+  # postgres:
+  #   image: pgvector/pgvector:pg16
+  #   environment:
+  #     POSTGRES_DB: lip
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes: [ "pg-data:/var/lib/postgresql/data" ]
+  # redis:
+  #   image: redis:7-alpine          # BullMQ job queue for the async pipeline worker
+  # minio:
+  #   image: minio/minio             # S3-compatible media/object storage
+  #   command: server /data
+  #   volumes: [ "minio-data:/data" ]
+
+volumes:
+  lip-data:
+  # pg-data:
+  # minio-data:

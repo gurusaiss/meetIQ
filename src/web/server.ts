@@ -56,7 +56,10 @@ if (configErrors.length) {
   process.exit(1);
 }
 
-const dataDir = fileURLToPath(new URL("../../data/", import.meta.url));
+// DATA_DIR lets tests/deploys point the store at a throwaway or mounted path.
+const dataDir = process.env.DATA_DIR
+  ? process.env.DATA_DIR.replace(/\/?$/, "/")
+  : fileURLToPath(new URL("../../data/", import.meta.url));
 mkdirSync(dataDir, { recursive: true });
 const repo = new SqliteRepository(dataDir + "lip.sqlite");
 const service = new LectureService(repo);

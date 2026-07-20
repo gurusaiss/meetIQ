@@ -138,14 +138,15 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 - Unit: pipeline stages + providers (mock-driven, deterministic).
 - Golden-set: a labeled far-field transcript → assert grounding + confidence behavior. **DONE** — `test/quality-gates.test.ts` drives the asset builder with controlled confidence profiles and pins the moat-#1 gates: clean audio stays draft, all-low-confidence auto-holds, the flag threshold and auto-hold ratio are honored at their boundaries, a hallucinated citation holds the asset even on clean audio, and no ungrounded content ever ships. 44 tests total.
 - Integration: enqueue→process→persist.
-- E2E: upload→approve→student search.
-- Quality gates (NFR-1): WER/DER thresholds auto-hold assets for review.
+- E2E: upload→approve→student search. **DONE** — `test/e2e.test.ts` boots the real server as a child process against a throwaway DB and drives login→create→process→approve→student→search→export→audit over HTTP, asserting the RBAC/approval/compliance gates.
+- Quality gates (NFR-1): WER/DER thresholds auto-hold assets for review. **DONE** — `test/quality-gates.test.ts`.
+- 47 tests total; CI runs typecheck + tests on every push/PR (Node 24).
 
 ---
 
 ## Phase 14 — Deployment
 
-Containerized (Docker), cloud-agnostic. `docker-compose` for local (Postgres+pgvector, Redis, MinIO). Prod: managed Postgres, Redis, object storage; app + worker as separate deployables; region pinning per tenant (moat #2).
+Containerized (Docker), cloud-agnostic. **DONE (app tier):** `Dockerfile` (no build step — runtime type-stripping; `/healthz` healthcheck), `.dockerignore`, and `docker-compose.yml` run the app self-contained on SQLite. The compose file scaffolds the future prod dependencies (Postgres+pgvector, Redis for the worker, MinIO) commented out until those adapters land. Prod target: managed Postgres, Redis, object storage; app + worker as separate deployables; region pinning per tenant (moat #2). (Docker image authored but not built in-repo — no running daemon here.)
 
 ---
 

@@ -5,7 +5,7 @@
   "description": "Compliant AI layer that turns in-person lecture recordings into study-ready, searchable knowledge.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "demo": "node --experimental-strip-types src/demo.ts",

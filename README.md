@@ -116,6 +116,22 @@ npm install
 npm run typecheck
 ```
 
+Requires **Node 24+** (TypeScript type-stripping + `node:sqlite` with no extra flags).
+
+## Deploy
+
+```bash
+docker compose up --build      # app on http://localhost:3000, data in a volume
+```
+
+The image runs the app directly (no build step — Node strips types at runtime)
+with a `/healthz` container healthcheck. `docker-compose.yml` also scaffolds the
+future production dependencies (Postgres+pgvector, Redis for the pipeline worker,
+MinIO for media), commented out until those adapters land.
+
+CI (`.github/workflows/ci.yml`) runs `typecheck` + the full test suite on every
+push/PR.
+
 ### Using real providers
 The real engines are implemented (AssemblyAI transcription via `fetch`; Claude
 generation via the official `@anthropic-ai/sdk` with structured outputs, model
