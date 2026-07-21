@@ -44,6 +44,7 @@ import {
 import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
 import { getCaptureSource } from "../integrations/capture.ts";
 import { MockLmsConnector } from "../integrations/lms.ts";
+import { isValidLectureId } from "./lecture-id.ts";
 
 const INSTITUTION_ID = "inst-a";
 const COURSE_ID = "cs101";
@@ -95,17 +96,6 @@ function cookie(token: string, clear = false): string {
   return clear
     ? `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
     : `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Lax`;
-}
-
-/**
- * Lecture ids come straight from a form field and end up in derived asset ids
- * (`${lectureId}:notes:0`), file paths for exports (as a filename component),
- * and URL segments. Restrict to a safe charset/length at the boundary rather
- * than trusting free text all the way into storage.
- */
-const LECTURE_ID_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,62}[a-zA-Z0-9])?$/;
-function isValidLectureId(id: string): boolean {
-  return LECTURE_ID_RE.test(id);
 }
 
 const server = createServer(async (req, res) => {

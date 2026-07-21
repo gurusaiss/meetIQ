@@ -186,8 +186,41 @@ src/
   demo-service.ts          full institutional lifecycle demo
 sample-data/               far-field lecture fixture (has low-confidence segments)
 test/                      node:test suite
+web/                       Next.js 15 App Router presentation layer (see below)
 ```
 
+## What's built (Increment 10: Next.js presentation layer)
+
+A second, real Next.js 15 App Router app under `web/` — the Phase 10 target
+stack — reusing every file under `src/` **completely unchanged** (no port, no
+duplication). Same URL scheme and HTTP status codes as the zero-dep server, so
+both are backed by the identical `LectureService`/gates. Flashcard/quiz
+interactivity is genuine React (`useState` client components), not the
+original inline `<script>`. CSP nonce via Next's own documented middleware
+pattern; genuine `403`s from Server Components via `forbidden()`.
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:3000 (dev mode)
+npm run build && npm start   # production build
+npm test         # builds + boots `next start` + drives the full journey over HTTP
+```
+
+Two disclosed, intentional differences from the zero-dep server's exact codes
+(both are *more correct* HTTP semantics): unauthenticated GET-page redirects
+are `307` (not `303` — 303 specifically means "convert POST to GET", which
+doesn't apply to a GET-to-GET redirect); `POST .../publish` redirects with a
+`?published=N` query notice instead of rendering the page inline at `200`.
+
+The two presentation layers are independent and interchangeable — pick
+whichever fits your deploy target; the zero-dep server remains the
+dependency-free reference implementation.
+
 ## Roadmap
-See Phase 12 in [`docs/DECISIONS.md`](docs/DECISIONS.md). Next: Increment 2 —
-persistence (Prisma + Postgres/pgvector) and wiring the real providers.
+See Phase 12 in [`docs/DECISIONS.md`](docs/DECISIONS.md). Remaining, each
+blocked on a resource unavailable in the build environment rather than
+un-designed: live smoke-test of real providers (needs API keys), the
+Postgres+pgvector `Repository` adapter (needs a running Postgres + an
+async-port refactor), and building/verifying either `Dockerfile` (needs a
+running Docker daemon).
