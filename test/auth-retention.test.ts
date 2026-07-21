@@ -7,6 +7,7 @@ import {
 } from "../src/services/lecture-service.ts";
 import {
   SessionStore,
+  RateLimiter,
   parseCookies,
   hasRole,
   type Identity,
@@ -62,6 +63,36 @@ test("hasRole enforces role membership and rejects null identity", () => {
   assert.equal(hasRole(admin, ["admin"]), true);
   assert.equal(hasRole(admin, ["faculty"]), false);
   assert.equal(hasRole(null, ["admin"]), false);
+});
+
+test("sessions expire after their TTL and are pruned on access", async () => {
+  const store = new SessionStore(20); // 20ms TTL
+  const id: Identity = { id: "sam", name: "Sam", role: "student", institutionId: "inst-a" };
+  const s = store.create(id);
+  assert.equal(store.get(s.token)?.identity.role, "student");
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(store.get(s.token), null, "session should be expired");
+  assert.equal(store.get(s.token), null, "second read should also be null (pruned, not re-created)");
+});
+
+test("rate limiter allows up to max attempts then blocks within the window", () => {
+  const rl = new RateLimiter(3, 1000);
+  const t0 = 1_000_000;
+  assert.equal(rl.check("1.2.3.4", t0), true);
+  assert.equal(rl.check("1.2.3.4", t0 + 10), true);
+  assert.equal(rl.check("1.2.3.4", t0 + 20), true);
+  assert.equal(rl.check("1.2.3.4", t0 + 30), false, "4th attempt within the window should be blocked");
+});
+
+test("rate limiter tracks keys independently and resets after the window", () => {
+  const rl = new RateLimiter(1, 1000);
+  const t0 = 2_000_000;
+  assert.equal(rl.check("a", t0), true);
+  assert.equal(rl.check("a", t0 + 10), false);
+  assert.equal(rl.check("b", t0 + 10), true, "a different key must not be affected by a's usage");
+  // The window is measured from each hit, not from t0 — wait past the LAST
+  // recorded hit (t0+10) before asserting the slate is clear.
+  assert.equal(rl.check("a", t0 + 10 + 1001), true, "window has elapsed — a's slate is clear");
 });
 
 // ── deletion (right to erasure) ──

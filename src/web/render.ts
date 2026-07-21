@@ -98,6 +98,12 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .opt.wrong{background:rgba(192,57,43,.12);border-color:var(--danger)}
 .score{font-weight:700;margin:10px 0}
 .exp{display:none}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link{position:absolute;left:-9999px;top:0;background:var(--brand);color:var(--brand-ink);
+  padding:8px 14px;border-radius:0 0 8px 0;z-index:100}
+.skip-link:focus{left:0}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 `;
 
 /**
@@ -126,8 +132,9 @@ export function layout(
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · Lecture Intelligence</title><style nonce="${esc(nonce)}">${CSS}</style></head>
 <body>
+<a href="#main" class="skip-link">Skip to content</a>
 <header class="top"><div class="brand">📚 Lecture Intelligence</div>${nav}</header>
-<div class="wrap">${body}</div></body></html>`;
+<main id="main" class="wrap">${body}</main></body></html>`;
 }
 
 export function loginPage(error?: string, nonce = ""): string {
@@ -137,9 +144,9 @@ export function loginPage(error?: string, nonce = ""): string {
      <p class="sub">In production this is your institution's SSO (SAML / LMS LTI). For this demo, choose an identity.</p>
      ${error ? `<div class="notice">${esc(error)}</div>` : ""}
      <div class="card"><form method="post" action="/login">
-       <label>Name</label><input name="name" value="Anika Rao" required>
-       <label>Role</label>
-       <select name="role">
+       <label for="login-name">Name</label><input id="login-name" name="name" value="Anika Rao" required>
+       <label for="login-role">Role</label>
+       <select id="login-role" name="role">
          <option value="faculty">faculty — record, review, approve, delete</option>
          <option value="ta">ta — review &amp; approve</option>
          <option value="student">student — study approved materials</option>
@@ -196,10 +203,12 @@ export function dashboardPage(
     ? `<div class="card">
       <h2 style="margin-top:0">New lecture</h2>
       <form method="post" action="/lectures">
-        <label>Lecture id</label>
-        <input name="lectureId" placeholder="lec-2" required>
-        <label>Capture source</label>
-        <select name="captureSource">
+        <label for="new-lecture-id">Lecture id</label>
+        <input id="new-lecture-id" name="lectureId" placeholder="lec-2" required
+          pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}[a-zA-Z0-9]?" maxlength="64"
+          title="1-64 characters: letters, digits, dot, dash, underscore">
+        <label for="new-capture-source">Capture source</label>
+        <select id="new-capture-source" name="captureSource">
           <option value="echo360-import">Echo360 import</option>
           <option value="panopto-import">Panopto import</option>
           <option value="upload">Direct upload</option>
@@ -436,7 +445,8 @@ export function searchPage(
     `<h1>Chat with the course</h1>
      <p class="sub">Semantic search across every lecture, with citations back to the exact moment.</p>
      <form method="get" action="/search"><div class="row">
-       <input name="q" value="${esc(query)}" placeholder="e.g. How are collisions handled?" style="flex:1">
+       <label for="search-q" class="sr-only">Search question</label>
+       <input id="search-q" name="q" value="${esc(query)}" placeholder="e.g. How are collisions handled?" style="flex:1">
        <button class="btn">Search</button></div></form>
      <div style="margin-top:16px">${results}</div>`,
     identity,

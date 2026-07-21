@@ -20,6 +20,7 @@ import {
 } from "../services/lecture-service.ts";
 import {
   SessionStore,
+  RateLimiter,
   parseCookies,
   hasRole,
   COOKIE_NAME,
@@ -64,6 +65,8 @@ mkdirSync(dataDir, { recursive: true });
 const repo = new SqliteRepository(dataDir + "lip.sqlite");
 const service = new LectureService(repo);
 const sessions = new SessionStore();
+// Login-endpoint abuse guard: 10 attempts / minute per client IP.
+const loginLimiter = new RateLimiter(10, 60_000);
 // One mock LMS connector for the process lifetime so pushes accumulate.
 const lms = new MockLmsConnector();
 // External course identifier as it exists in the LMS/capture system.
@@ -162,6 +165,11 @@ const server = createServer(async (req, res) => {
       return identity ? redirect("/") : html(loginPage(undefined, nonce));
     }
     if (method === "POST" && path === "/login") {
+      const clientKey = req.socket.remoteAddress ?? "unknown";
+      if (!loginLimiter.check(clientKey)) {
+        log.warn("login rate limited", { clientKey });
+        return html(loginPage("Too many attempts. Please wait a minute and try again.", nonce), 429);
+      }
       const b = await readBody(req);
       const name = (b.get("name") ?? "").trim();
       const role = (b.get("role") ?? "") as Role;

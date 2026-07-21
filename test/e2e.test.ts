@@ -170,3 +170,19 @@ test("full faculty→student journey over HTTP", async () => {
   const audit = await (await fetch(`${BASE}/audit`, { headers: { cookie: admin } })).text();
   assert.match(audit, /asset.approved/);
 });
+
+// Runs LAST: exhausts the shared login rate-limit key (loopback address), so
+// no test after this one in the file can log in.
+test("repeated login attempts get rate limited", async () => {
+  let sawTooMany = false;
+  for (let i = 0; i < 15 && !sawTooMany; i++) {
+    const res = await fetch(`${BASE}/login`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: `name=Flood${i}&role=student`,
+      redirect: "manual",
+    });
+    if (res.status === 429) sawTooMany = true;
+  }
+  assert.equal(sawTooMany, true, "expected a 429 after enough rapid login attempts");
+});

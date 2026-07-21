@@ -102,6 +102,14 @@ once flows are proven; built runnably first so it can be verified today.
 - **Graceful shutdown** on SIGTERM/SIGINT (the container path) and SIGBREAK.
 - 500 responses no longer leak internal error details to clients.
 
+## What's built (Increment 9: session lifecycle + accessibility)
+
+- **Session expiry** — sessions now time out after 8 hours instead of living
+  forever; login is rate-limited (10/min per client) against brute-force abuse.
+- **Accessibility (NFR-6)** — every form label is programmatically associated
+  with its input (`for`/`id`), a skip-to-content link, a `<main>` landmark,
+  and visible focus outlines.
+
 ## Quick start
 
 ```bash

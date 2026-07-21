@@ -144,6 +144,11 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 
 **Security hardening (2026-07-19):** every response now carries a strict Content-Security-Policy (per-request nonce for the page's own inline `<style>`/`<script>`, no `unsafe-inline`, `object-src 'none'`, `frame-ancestors 'none'`), plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, and HSTS. `lectureId` (the one free-text field that reaches storage/exports) is now validated against a safe charset/length at the web boundary — rejects path-traversal-shaped input (e.g. `../etc/passwd`) with 400 instead of accepting it. Verified via curl (headers present, nonce matches the rendered page) and in `test/e2e.test.ts`.
 
+**Increment 9 — session lifecycle + accessibility (2026-07-19):**
+- Sessions now expire (8h TTL, `SessionStore` pruning on access) — previously they lived forever until server restart, a real gap for a compliance product. Login endpoint gets a sliding-window rate limiter (10/min per client) against brute-force/enumeration.
+- Accessibility (NFR-6): all form labels now programmatically associated via `for`/`id` (login name/role, lecture id/capture source, search query — the latter via a visually-hidden label), a skip-to-content link, a `<main>` landmark, and visible `:focus-visible` outlines. Previously labels were adjacent siblings with no association — a real gap between the NFR-6 claim and the rendered markup.
+- 54 tests total (4 new: session expiry, rate-limit unit + E2E, key-independent rate limiting). Verified live via curl (headers, label `for`/`id` pairs, skip link, main landmark).
+
 ---
 
 ## Phase 14 — Deployment
