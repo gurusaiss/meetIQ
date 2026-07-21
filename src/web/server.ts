@@ -94,6 +94,17 @@ function cookie(token: string, clear = false): string {
     : `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Lax`;
 }
 
+/**
+ * Lecture ids come straight from a form field and end up in derived asset ids
+ * (`${lectureId}:notes:0`), file paths for exports (as a filename component),
+ * and URL segments. Restrict to a safe charset/length at the boundary rather
+ * than trusting free text all the way into storage.
+ */
+const LECTURE_ID_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,62}[a-zA-Z0-9])?$/;
+function isValidLectureId(id: string): boolean {
+  return LECTURE_ID_RE.test(id);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   const path = url.pathname;
@@ -107,6 +118,22 @@ const server = createServer(async (req, res) => {
   res.on("finish", () => {
     log.info("request", { method, path, status: res.statusCode, ms: Date.now() - startedAt });
   });
+
+  // Security headers on every response. CSP uses a per-request nonce for the
+  // page's inline <style>/<script> (no external assets to host) instead of
+  // 'unsafe-inline' — the nonce is threaded into every render call below.
+  const nonce = randomUUID();
+  res.setHeader(
+    "content-security-policy",
+    `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; ` +
+      `img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
+  );
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("referrer-policy", "no-referrer");
+  res.setHeader("permissions-policy", "geolocation=(), microphone=(), camera=()");
+  // HSTS is a no-op over plain HTTP locally but correct once behind TLS in prod.
+  res.setHeader("strict-transport-security", "max-age=31536000; includeSubDomains");
 
   // Liveness/readiness probe — no auth, checks the datastore.
   if (method === "GET" && (path === "/healthz" || path === "/readyz")) {
@@ -124,20 +151,22 @@ const server = createServer(async (req, res) => {
     res.writeHead(303, { location: to, ...headers });
     res.end();
   };
-  const forbid = () => html(layout("Forbidden", "<h1>403 — not permitted for your role</h1>"), 403);
+  const forbid = () =>
+    html(layout("Forbidden", "<h1>403 — not permitted for your role</h1>", null, nonce), 403);
 
   const identity = sessions.get(parseCookies(req.headers.cookie)[COOKIE_NAME])?.identity ?? null;
 
   try {
     // ── Auth routes (no session required) ──
     if (method === "GET" && path === "/login") {
-      return identity ? redirect("/") : html(loginPage());
+      return identity ? redirect("/") : html(loginPage(undefined, nonce));
     }
     if (method === "POST" && path === "/login") {
       const b = await readBody(req);
       const name = (b.get("name") ?? "").trim();
       const role = (b.get("role") ?? "") as Role;
-      if (!name || !ROLES.includes(role)) return html(loginPage("Enter a name and valid role."), 400);
+      if (!name || !ROLES.includes(role))
+        return html(loginPage("Enter a name and valid role.", nonce), 400);
       const id: Identity = {
         id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         name,
@@ -158,7 +187,7 @@ const server = createServer(async (req, res) => {
     // ── Dashboard ──
     if (method === "GET" && path === "/") {
       return html(
-        dashboardPage(COURSE_TITLE, repo.listLecturesByCourse(INSTITUTION_ID, COURSE_ID), identity),
+        dashboardPage(COURSE_TITLE, repo.listLecturesByCourse(INSTITUTION_ID, COURSE_ID), identity, nonce),
       );
     }
 
@@ -167,7 +196,18 @@ const server = createServer(async (req, res) => {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const b = await readBody(req);
       const lectureId = (b.get("lectureId") ?? "").trim();
-      if (!lectureId) return html(layout("Error", "<h1>Missing lecture id</h1>", identity), 400);
+      if (!lectureId) return html(layout("Error", "<h1>Missing lecture id</h1>", identity, nonce), 400);
+      if (!isValidLectureId(lectureId)) {
+        return html(
+          layout(
+            "Error",
+            "<h1>Invalid lecture id</h1><p>Use 1–64 characters: letters, digits, dot, dash, underscore; must start and end with a letter or digit.</p>",
+            identity,
+            nonce,
+          ),
+          400,
+        );
+      }
       service.createLecture({
         institutionId: INSTITUTION_ID,
         courseId: COURSE_ID,
@@ -197,6 +237,7 @@ const server = createServer(async (req, res) => {
               `<h1>Processing blocked</h1><div class="notice">${e.message}</div>
                <p style="margin-top:16px"><a href="/">← Dashboard</a></p>`,
               identity,
+              nonce,
             ),
             409,
           );
@@ -225,7 +266,7 @@ const server = createServer(async (req, res) => {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const lectureId = decodeURIComponent(m[1]!);
       const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
-      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity), 404);
+      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
       const count = await service.publishToLms(
         INSTITUTION_ID,
         lectureId,
@@ -237,7 +278,9 @@ const server = createServer(async (req, res) => {
         count > 0
           ? `Published ${count} approved asset(s) to the LMS (mock connector). Total pushed this session: ${lms.published.length}.`
           : `Nothing to publish — approve at least one asset first.`;
-      return html(reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, notice));
+      return html(
+        reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, notice, nonce),
+      );
     }
 
     // ── Delete lecture (faculty/ta/admin) — right to erasure ──
@@ -259,8 +302,10 @@ const server = createServer(async (req, res) => {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const lectureId = decodeURIComponent(m[1]!);
       const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
-      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity), 404);
-      return html(reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity));
+      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
+      return html(
+        reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, undefined, nonce),
+      );
     }
 
     // ── Student view (any authenticated) ──
@@ -268,8 +313,10 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && m) {
       const lectureId = decodeURIComponent(m[1]!);
       const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
-      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity), 404);
-      return html(studentPage(lecture, service.studentAssets(INSTITUTION_ID, lectureId), identity));
+      if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
+      return html(
+        studentPage(lecture, service.studentAssets(INSTITUTION_ID, lectureId), identity, nonce),
+      );
     }
 
     // ── Approve asset (faculty/ta) ──
@@ -298,16 +345,16 @@ const server = createServer(async (req, res) => {
         });
       if (file === "notes.md") {
         const a = approved.find((x) => x.type === "notes");
-        if (!a) return html(layout("Not available", "<h1>Notes not released yet</h1>", identity), 404);
+        if (!a) return html(layout("Not available", "<h1>Notes not released yet</h1>", identity, nonce), 404);
         return download(notesToMarkdown(lectureId, a.content as RevisionNotes), "text/markdown", `${lectureId}-notes.md`);
       }
       if (file === "flashcards.csv") {
         const a = approved.find((x) => x.type === "flashcards");
-        if (!a) return html(layout("Not available", "<h1>Flashcards not released yet</h1>", identity), 404);
+        if (!a) return html(layout("Not available", "<h1>Flashcards not released yet</h1>", identity, nonce), 404);
         return download(flashcardsToAnkiCsv((a.content as { cards: Flashcard[] }).cards), "text/csv", `${lectureId}-flashcards.csv`);
       }
       const a = approved.find((x) => x.type === "quiz");
-      if (!a) return html(layout("Not available", "<h1>Quiz not released yet</h1>", identity), 404);
+      if (!a) return html(layout("Not available", "<h1>Quiz not released yet</h1>", identity, nonce), 404);
       return download(quizToMarkdown(lectureId, a.content as Quiz), "text/markdown", `${lectureId}-quiz.md`);
     }
 
@@ -315,14 +362,14 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && path === "/search") {
       const q = (url.searchParams.get("q") ?? "").trim();
       const hits = q ? await service.searchCourse(INSTITUTION_ID, COURSE_ID, q, 3) : [];
-      return html(searchPage(q, hits, identity));
+      return html(searchPage(q, hits, identity, nonce));
     }
 
     // ── Audit (admin only) ──
     if (method === "GET" && path === "/audit") {
       if (!hasRole(identity, ["admin"])) return forbid();
       const inst = repo.getInstitution(INSTITUTION_ID);
-      return html(auditPage(repo.listAudit(INSTITUTION_ID), identity, inst?.retentionDays ?? 0));
+      return html(auditPage(repo.listAudit(INSTITUTION_ID), identity, inst?.retentionDays ?? 0, nonce));
     }
 
     // ── Run retention (admin only) ──
@@ -337,11 +384,13 @@ const server = createServer(async (req, res) => {
       return redirect("/audit");
     }
 
-    return html(layout("Not found", "<h1>404</h1><p><a href='/'>Dashboard</a></p>", identity), 404);
+    return html(layout("Not found", "<h1>404</h1><p><a href='/'>Dashboard</a></p>", identity, nonce), 404);
   } catch (err) {
     log.error("unhandled request error", { method, path, error: (err as Error).message });
     res.writeHead(500, { "content-type": "text/html; charset=utf-8" });
-    res.end(layout("Error", "<h1>Server error</h1><p>An unexpected error occurred. It has been logged.</p>"));
+    res.end(
+      layout("Error", "<h1>Server error</h1><p>An unexpected error occurred. It has been logged.</p>", null, nonce),
+    );
   }
 });
 

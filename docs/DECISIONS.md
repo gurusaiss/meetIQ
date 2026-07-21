@@ -140,7 +140,9 @@ All tenant-scoped via session; RBAC middleware; Zod-validated inputs.
 - Integration: enqueue→process→persist.
 - E2E: upload→approve→student search. **DONE** — `test/e2e.test.ts` boots the real server as a child process against a throwaway DB and drives login→create→process→approve→student→search→export→audit over HTTP, asserting the RBAC/approval/compliance gates.
 - Quality gates (NFR-1): WER/DER thresholds auto-hold assets for review. **DONE** — `test/quality-gates.test.ts`.
-- 47 tests total; CI runs typecheck + tests on every push/PR (Node 24).
+- 50 tests total; CI runs typecheck + tests on every push/PR (Node 24).
+
+**Security hardening (2026-07-19):** every response now carries a strict Content-Security-Policy (per-request nonce for the page's own inline `<style>`/`<script>`, no `unsafe-inline`, `object-src 'none'`, `frame-ancestors 'none'`), plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, and HSTS. `lectureId` (the one free-text field that reaches storage/exports) is now validated against a safe charset/length at the web boundary — rejects path-traversal-shaped input (e.g. `../etc/passwd`) with 400 instead of accepting it. Verified via curl (headers present, nonce matches the rendered page) and in `test/e2e.test.ts`.
 
 ---
 

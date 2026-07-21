@@ -100,7 +100,20 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .exp{display:none}
 `;
 
-export function layout(title: string, body: string, identity?: Identity | null): string {
+/**
+ * `nonce` is a per-request random value the server also sends in the
+ * Content-Security-Policy header (script-src/style-src 'nonce-...'). This
+ * lets the page keep its inline <style>/<script> (no external assets to
+ * host) while still refusing any *other* inline or injected script — the
+ * defensible middle ground between `unsafe-inline` (too broad) and a full
+ * static-asset rewrite (unnecessary for a page this size).
+ */
+export function layout(
+  title: string,
+  body: string,
+  identity?: Identity | null,
+  nonce = "",
+): string {
   let nav = "";
   if (identity) {
     const adminLink = identity.role === "admin" ? `<a href="/audit">Audit</a>` : "";
@@ -111,13 +124,13 @@ export function layout(title: string, body: string, identity?: Identity | null):
   }
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · Lecture Intelligence</title><style>${CSS}</style></head>
+<title>${esc(title)} · Lecture Intelligence</title><style nonce="${esc(nonce)}">${CSS}</style></head>
 <body>
 <header class="top"><div class="brand">📚 Lecture Intelligence</div>${nav}</header>
 <div class="wrap">${body}</div></body></html>`;
 }
 
-export function loginPage(error?: string): string {
+export function loginPage(error?: string, nonce = ""): string {
   return layout(
     "Sign in",
     `<h1>Sign in</h1>
@@ -134,6 +147,8 @@ export function loginPage(error?: string): string {
        </select>
        <div style="margin-top:14px"><button class="btn">Sign in</button></div>
      </form></div>`,
+    null,
+    nonce,
   );
 }
 
@@ -147,6 +162,7 @@ export function dashboardPage(
   courseTitle: string,
   lectures: Lecture[],
   identity: Identity,
+  nonce = "",
 ): string {
   const canManage = ["faculty", "ta", "admin"].includes(identity.role);
   const rows = lectures.length
@@ -203,6 +219,7 @@ export function dashboardPage(
      ${importCard}
      ${createCard}`,
     identity,
+    nonce,
   );
 }
 
@@ -279,6 +296,7 @@ export function reviewPage(
   assets: StoredAsset[],
   identity: Identity,
   notice?: string,
+  nonce = "",
 ): string {
   const approvedCount = assets.filter((a) => a.status === "approved").length;
   const publishBar = `<div class="card"><div class="row"><div>
@@ -294,6 +312,7 @@ export function reviewPage(
      ${assets.map((a) => assetBlock(a, true)).join("<hr style='border:0;border-top:1px solid var(--line);margin:20px 0'>")}
      <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
     identity,
+    nonce,
   );
 }
 
@@ -325,7 +344,8 @@ function renderQuizStudent(q: Quiz): string {
   return `<div data-quiz>${questions}<div class="score"></div><button class="btn" data-check>Check answers</button></div>`;
 }
 
-const STUDENT_SCRIPT = `<script>
+function studentScript(nonce: string): string {
+  return `<script nonce="${esc(nonce)}">
 document.addEventListener('click', function(e){
   var fc = e.target.closest('.fc');
   if(fc){ fc.classList.toggle('flipped'); return; }
@@ -346,11 +366,13 @@ document.addEventListener('click', function(e){
   }
 });
 </script>`;
+}
 
 export function studentPage(
   lecture: Lecture,
   assets: StoredAsset[],
   identity: Identity,
+  nonce = "",
 ): string {
   if (!assets.length) {
     return layout(
@@ -360,6 +382,7 @@ export function studentPage(
        <div class="notice">No materials have been released for this lecture yet. Your instructor reviews and approves them first.</div>
        <p style="margin-top:24px"><a href="/">← Dashboard</a></p>`,
       identity,
+      nonce,
     );
   }
   const base = `/lectures/${encodeURIComponent(lecture.id)}/export`;
@@ -385,13 +408,19 @@ export function studentPage(
     "Student view",
     `<h1>${esc(lecture.id)} — study materials</h1>
      <p class="sub">Approved, verified materials from your lecture.</p>
-     ${blocks}${STUDENT_SCRIPT}
+     ${blocks}${studentScript(nonce)}
      <p style="margin-top:24px"><a href="/search">Search this course →</a> · <a href="/">← Dashboard</a></p>`,
     identity,
+    nonce,
   );
 }
 
-export function searchPage(query: string, hits: SearchHit[], identity: Identity): string {
+export function searchPage(
+  query: string,
+  hits: SearchHit[],
+  identity: Identity,
+  nonce = "",
+): string {
   const results = query
     ? hits.length
       ? hits
@@ -411,6 +440,7 @@ export function searchPage(query: string, hits: SearchHit[], identity: Identity)
        <button class="btn">Search</button></div></form>
      <div style="margin-top:16px">${results}</div>`,
     identity,
+    nonce,
   );
 }
 
@@ -418,6 +448,7 @@ export function auditPage(
   events: AuditEvent[],
   identity: Identity,
   retentionDays: number,
+  nonce = "",
 ): string {
   const rows = events
     .map(
@@ -436,6 +467,7 @@ export function auditPage(
      <div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
      <tbody>${rows || '<tr><td colspan="4" class="muted">No events yet.</td></tr>'}</tbody></table></div>`,
     identity,
+    nonce,
   );
 }
 

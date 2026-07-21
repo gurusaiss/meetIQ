@@ -63,6 +63,45 @@ test("health check reports the datastore is up", async () => {
   assert.deepEqual(await res.json(), { status: "ok", db: "ok" });
 });
 
+test("security headers are present on every response", async () => {
+  const res = await fetch(`${BASE}/login`);
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(res.headers.get("x-frame-options"), "DENY");
+  assert.equal(res.headers.get("referrer-policy"), "no-referrer");
+  assert.match(res.headers.get("permissions-policy") ?? "", /camera=\(\)/);
+  assert.match(res.headers.get("strict-transport-security") ?? "", /max-age=/);
+  const csp = res.headers.get("content-security-policy") ?? "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+});
+
+test("CSP nonce matches the nonce on the page's inline style/script", async () => {
+  const res = await fetch(`${BASE}/login`);
+  const csp = res.headers.get("content-security-policy") ?? "";
+  const nonce = (csp.match(/'nonce-([^']+)'/) ?? [])[1];
+  assert.ok(nonce, "CSP header should carry a nonce");
+  const body = await res.text();
+  assert.match(body, new RegExp(`<style nonce="${nonce}">`));
+});
+
+test("an invalid lecture id is rejected with 400, not silently accepted", async () => {
+  const login = await fetch(`${BASE}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const res = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+    body: `lectureId=${encodeURIComponent("../etc/passwd")}&captureSource=upload&noticeShown=on`,
+    redirect: "manual",
+  });
+  assert.equal(res.status, 400);
+});
+
 test("unauthenticated request redirects to login", async () => {
   const res = await fetch(`${BASE}/`, { redirect: "manual" });
   assert.equal(res.status, 303);
