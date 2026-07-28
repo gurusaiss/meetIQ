@@ -1,8 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessions, getLoginLimiter, INSTITUTION_ID } from "../../../lib/singletons.ts";
 import { COOKIE_NAME, type Identity, type Role } from "../../../lib/auth.ts";
+import { config } from "../../../../src/config.ts";
 
 const ROLES: Role[] = ["student", "faculty", "ta", "admin"];
+
+/**
+ * `X-Forwarded-For` is set by the CLIENT unless a trusted reverse proxy
+ * overwrites it — trusting it unconditionally would let anyone bypass the
+ * rate limiter below by sending a different value on every request. Only
+ * read it when the operator has confirmed a trusted proxy is in front
+ * (TRUST_PROXY=1); otherwise fall back to a single shared key, which still
+ * caps total login attempts even though it can't distinguish clients.
+ */
+function clientKey(req: NextRequest): string {
+  if (!config.security.trustProxy) return "unproxied";
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
 
 /** A non-redirect error response — NextResponse.redirect only accepts 3xx statuses. */
 function errorPage(status: number, message: string): NextResponse {
@@ -14,9 +28,7 @@ function errorPage(status: number, message: string): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
-  const clientKey =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!getLoginLimiter().check(clientKey)) {
+  if (!getLoginLimiter().check(clientKey(req))) {
     return errorPage(429, "Too many attempts. Please wait a minute and try again.");
   }
 

@@ -17,6 +17,7 @@ import {
   LectureService,
   ComplianceError,
   AuthorizationError,
+  ConflictError,
 } from "../services/lecture-service.ts";
 import {
   SessionStore,
@@ -214,14 +215,30 @@ const server = createServer(async (req, res) => {
           400,
         );
       }
-      await service.createLecture({
-        institutionId: INSTITUTION_ID,
-        courseId: COURSE_ID,
-        lectureId,
-        mediaRef: `media://${lectureId}`,
-        captureSource: b.get("captureSource") ?? "upload",
-        consent: { noticeShown: b.get("noticeShown") === "on" },
-      });
+      try {
+        await service.createLecture({
+          institutionId: INSTITUTION_ID,
+          courseId: COURSE_ID,
+          lectureId,
+          mediaRef: `media://${lectureId}`,
+          captureSource: b.get("captureSource") ?? "upload",
+          consent: { noticeShown: b.get("noticeShown") === "on" },
+        });
+      } catch (e) {
+        if (e instanceof ConflictError) {
+          return html(
+            layout(
+              "Error",
+              `<h1>Lecture already exists</h1><div class="notice">${e.message}</div>
+               <p style="margin-top:16px"><a href="/">← Dashboard</a></p>`,
+              identity,
+              nonce,
+            ),
+            409,
+          );
+        }
+        throw e;
+      }
       return redirect("/");
     }
 

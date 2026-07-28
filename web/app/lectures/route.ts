@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
 import { getService, INSTITUTION_ID, COURSE_ID } from "../../lib/singletons.ts";
 import { isValidLectureId } from "../../../src/web/lecture-id.ts";
+import { ConflictError } from "../../../src/services/lecture-service.ts";
+import { htmlError, escapeHtml } from "../../lib/http.ts";
 
 export async function POST(req: NextRequest) {
   const identity = await getIdentity();
@@ -27,14 +29,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  await getService().createLecture({
-    institutionId: INSTITUTION_ID,
-    courseId: COURSE_ID,
-    lectureId,
-    mediaRef: `media://${lectureId}`,
-    captureSource: String(form.get("captureSource") ?? "upload"),
-    consent: { noticeShown: form.get("noticeShown") === "on" },
-  });
+  try {
+    await getService().createLecture({
+      institutionId: INSTITUTION_ID,
+      courseId: COURSE_ID,
+      lectureId,
+      mediaRef: `media://${lectureId}`,
+      captureSource: String(form.get("captureSource") ?? "upload"),
+      consent: { noticeShown: form.get("noticeShown") === "on" },
+    });
+  } catch (e) {
+    if (e instanceof ConflictError) {
+      return htmlError(
+        409,
+        `<h1>Lecture already exists</h1><div class="notice">${escapeHtml(e.message)}</div><p><a href="/">← Dashboard</a></p>`,
+      );
+    }
+    throw e;
+  }
 
   return NextResponse.redirect(new URL("/", req.url), { status: 303 });
 }

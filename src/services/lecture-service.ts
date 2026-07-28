@@ -38,6 +38,7 @@ export interface Actor {
 
 export class ComplianceError extends Error {}
 export class AuthorizationError extends Error {}
+export class ConflictError extends Error {}
 
 export interface CreateLectureInput {
   institutionId: string;
@@ -63,6 +64,14 @@ export class LectureService {
   async createLecture(input: CreateLectureInput): Promise<Lecture> {
     const inst = await this.repo.getInstitution(input.institutionId);
     if (!inst) throw new ComplianceError(`Unknown institution ${input.institutionId}`);
+
+    // Checked explicitly (rather than letting the insert's primary-key
+    // violation bubble up) so a double form-submission or a resubmitted
+    // browser-back request surfaces a clear, catchable error instead of an
+    // adapter-specific SQL error string leaking into a generic 500.
+    if (await this.repo.getLecture(input.institutionId, input.lectureId)) {
+      throw new ConflictError(`Lecture ${input.lectureId} already exists.`);
+    }
 
     const lecture: Lecture = {
       id: input.lectureId,

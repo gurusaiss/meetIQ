@@ -123,6 +123,31 @@ test("an invalid lecture id is rejected with 400", async () => {
   assert.equal(res.status, 400);
 });
 
+test("creating a lecture with a duplicate id returns 409, not a raw 500", async () => {
+  const login = await fetch(`${BASE}/api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const body = "lectureId=dup-lec&captureSource=upload&noticeShown=on";
+  const first = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+    body,
+    redirect: "manual",
+  });
+  assert.equal(first.status, 303);
+  const second = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+    body,
+    redirect: "manual",
+  });
+  assert.equal(second.status, 409);
+});
+
 test("full faculty→student journey over HTTP", async () => {
   const login = await fetch(`${BASE}/api/login`, {
     method: "POST",

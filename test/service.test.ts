@@ -8,6 +8,7 @@ import {
   LectureService,
   ComplianceError,
   AuthorizationError,
+  ConflictError,
 } from "../src/services/lecture-service.ts";
 import type { Institution, Course } from "../src/persistence/repository.ts";
 
@@ -52,6 +53,20 @@ test("process persists transcript, assets, and chunks", async () => {
   assert.equal((await repo.listAssets("inst-a", "lec-1")).length, 3);
   assert.equal((await repo.listCourseChunks("inst-a", "course-cs101")).length > 0, true);
   assert.equal((await repo.getLecture("inst-a", "lec-1"))?.status, "processed");
+});
+
+test("creating a lecture with an id that already exists raises ConflictError, not a raw DB error", async () => {
+  const { service } = await svc();
+  const input = {
+    institutionId: "inst-a",
+    courseId: "course-cs101",
+    lectureId: "lec-dup",
+    mediaRef: "media://x",
+    captureSource: "upload",
+    consent: { noticeShown: true },
+  };
+  await service.createLecture(input);
+  await assert.rejects(() => service.createLecture(input), ConflictError);
 });
 
 test("compliance gate blocks processing without consent notice (all-party tenant)", async () => {

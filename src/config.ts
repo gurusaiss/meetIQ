@@ -12,6 +12,12 @@ function str(name: string, fallback: string): string {
   return raw === undefined || raw === "" ? fallback : raw;
 }
 
+function bool(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  return raw === "1" || raw.toLowerCase() === "true";
+}
+
 export const config = {
   providers: {
     transcription: str("TRANSCRIPTION_PROVIDER", "mock"),
@@ -35,6 +41,16 @@ export const config = {
     driver: str("REPO_DRIVER", "sqlite"),
     databaseUrl: str("DATABASE_URL", ""),
     vectorDim: num("EMBEDDING_VECTOR_DIM", 256),
+  },
+  security: {
+    /**
+     * `X-Forwarded-For` is client-suppliable and only trustworthy behind a
+     * reverse proxy that overwrites/strips it before forwarding. Default
+     * false because the default deploy target (`docker-compose.yml`) exposes
+     * the app directly with no proxy in front — trusting it there would let
+     * any client bypass the login rate limiter by varying the header.
+     */
+    trustProxy: bool("TRUST_PROXY", false),
   },
 } as const;
 

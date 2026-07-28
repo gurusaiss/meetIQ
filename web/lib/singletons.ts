@@ -4,25 +4,29 @@
  * unchanged from the zero-dep server; only the HTTP-framing layer around
  * them (this Next.js app) is new.
  *
- * Construction is LAZY (first-call, not eager module-load) and cached on
- * `globalThis`. Two reasons this matters specifically under Next.js:
- *  - Next's `next build` "collect page data" step imports every route module
- *    across multiple worker processes to inspect its exports. A module-level
- *    side effect (opening the SQLite file, or connecting to Postgres) then
- *    races across workers and can throw (`SQLITE_BUSY` was a real failure
- *    this project hit) — lazy construction avoids that entirely.
- *  - `globalThis` caching also protects against Next's dev-mode module
- *    reloading spawning a second connection/session store on every edit.
- *
- * Seeding (`seedInstitution`) is awaited via a **module-level top-level
- * await**, not inside the getters — this keeps every getter synchronous (no
- * call-site changes needed anywhere else in the app: `getRepo().getLecture()`
- * still works), while guaranteeing seeding completes before the module
- * finishes loading. This matters for a real async adapter (Postgres): without
- * it, a request could race the seed insert and read a tenant that isn't
- * there yet — a race SQLite's synchronous nature would have masked.
+ * Construction + seeding are skipped entirely during `next build`'s "collect
+ * page data" step (see the `NEXT_PHASE` guard below) and otherwise run once,
+ * eagerly, at module load, cached on `globalThis`. Three reasons this matters
+ * specifically under Next.js:
+ *  - `next build` imports every route module across multiple worker
+ *    PROCESSES purely to inspect its exports, never to serve a request. If
+ *    module load touched the datastore, those processes would race to
+ *    open/write the same SQLite file (or same Postgres schema-init) and the
+ *    build itself would fail (`SQLITE_ERROR: database is locked` was a real
+ *    failure this hit) — the phase guard avoids that entirely.
+ *  - `globalThis` caching protects against Next's dev-mode module reloading
+ *    spawning a second connection/session store on every edit.
+ *  - Seeding (`seedInstitution`) is awaited via a **module-level top-level
+ *    await**, not inside the getters — this keeps every getter synchronous
+ *    (no call-site changes needed anywhere else in the app:
+ *    `getRepo().getLecture()` still works), while guaranteeing seeding
+ *    completes before the module finishes loading and any real request is
+ *    served. This matters for a real async adapter (Postgres): without it, a
+ *    request could race the seed insert and read a tenant that isn't there
+ *    yet — a race SQLite's synchronous nature would have masked.
  */
 import { mkdirSync } from "node:fs";
+import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
 import { validateConfig, config } from "../../src/config.ts";
 import { logger } from "../../src/observability/logger.ts";
 import { createRepository, type Repository } from "../../src/persistence/index.ts";
@@ -72,8 +76,6 @@ function build(): void {
   g.__lipLms = new MockLmsConnector();
 }
 
-build();
-
 async function seed(): Promise<void> {
   await g.__lipService!.seedInstitution(
     {
@@ -87,10 +89,24 @@ async function seed(): Promise<void> {
   );
 }
 
-if (!g.__lipSeedPromise) g.__lipSeedPromise = seed();
-// Top-level await: blocks this module (and anything importing it) from
-// finishing evaluation until seeding completes, exactly once per process.
-await g.__lipSeedPromise;
+// `next build`'s "collect page data" step imports every route module across
+// several worker PROCESSES purely to introspect its exports — it never
+// invokes a handler. Those processes each import this module concurrently;
+// if we touched the datastore here, they'd race to open/write the same
+// SQLite file (or same Postgres schema-init) and `next build` itself would
+// fail (SQLITE_ERROR: database is locked was a real failure this hit).
+// Real requests only ever happen under `next dev`/`next start`, where
+// NEXT_PHASE is never phase-production-build, so this guard skips all I/O
+// during build while still running it — via the top-level await below —
+// before any actual route handler executes.
+const isBuildPhase = process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
+if (!isBuildPhase) {
+  build();
+  if (!g.__lipSeedPromise) g.__lipSeedPromise = seed();
+  // Top-level await: blocks this module (and anything importing it) from
+  // finishing evaluation until seeding completes, exactly once per process.
+  await g.__lipSeedPromise;
+}
 
 export function getRepo(): Repository {
   return g.__lipRepo!;

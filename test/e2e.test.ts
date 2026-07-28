@@ -102,6 +102,27 @@ test("an invalid lecture id is rejected with 400, not silently accepted", async 
   assert.equal(res.status, 400);
 });
 
+test("creating a lecture with a duplicate id returns 409, not a raw 500", async () => {
+  const login = await fetch(`${BASE}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const body = "lectureId=dup-lec&captureSource=upload&noticeShown=on";
+  const opts = {
+    method: "POST" as const,
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+    body,
+    redirect: "manual" as const,
+  };
+  const first = await fetch(`${BASE}/lectures`, opts);
+  assert.equal(first.status, 303);
+  const second = await fetch(`${BASE}/lectures`, opts);
+  assert.equal(second.status, 409);
+});
+
 test("unauthenticated request redirects to login", async () => {
   const res = await fetch(`${BASE}/`, { redirect: "manual" });
   assert.equal(res.status, 303);
