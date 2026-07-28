@@ -8,10 +8,10 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   if (!identity) redirect("/login");
 
   const { id: lectureId } = await params;
-  const lecture = getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
   if (!lecture) notFound();
 
-  const assets = getService().studentAssets(INSTITUTION_ID, lectureId);
+  const assets = await getService().studentAssets(INSTITUTION_ID, lectureId);
   const base = `/lectures/${encodeURIComponent(lectureId)}/export`;
   const exportHref: Record<string, string> = {
     notes: `${base}/notes.md`,

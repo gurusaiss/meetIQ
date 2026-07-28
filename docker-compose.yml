@@ -1,7 +1,10 @@
-# Local/pilot deployment. The app runs self-contained on the built-in SQLite
-# store (moat #2 tenant isolation still applies). The postgres/redis/minio
-# services below are scaffolded for the production adapters (Phase 12 Inc 2+):
-# uncomment and set REPO_DRIVER=postgres once the pgvector adapter lands.
+# Default (`docker compose up`) runs the app self-contained on the built-in
+# SQLite store (moat #2 tenant isolation still applies). To run against the
+# real Postgres+pgvector adapter instead (Phase 12 Inc 2+, landed):
+#   docker compose --profile postgres up
+# which starts `postgres` and points the app at REPO_DRIVER=postgres.
+# Redis/MinIO remain scaffolded (commented) until the async worker and
+# object-storage layer land.
 services:
   app:
     build: .
@@ -20,13 +23,41 @@ services:
       - lip-data:/data
     restart: unless-stopped
 
+  # ── Postgres+pgvector adapter (opt-in via --profile postgres) ───────
+  app-postgres:
+    build: .
+    profiles: ["postgres"]
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      REPO_DRIVER: postgres
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-devpass}@postgres:5432/lip
+      # TRANSCRIPTION_PROVIDER: assemblyai
+      # ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY}
+      # LLM_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # LLM_MODEL: claude-sonnet-5
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: lip
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+    volumes: [ "pg-data:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   # ── Future production dependencies (not yet wired) ──────────────────
-  # postgres:
-  #   image: pgvector/pgvector:pg16
-  #   environment:
-  #     POSTGRES_DB: lip
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-  #   volumes: [ "pg-data:/var/lib/postgresql/data" ]
   # redis:
   #   image: redis:7-alpine          # BullMQ job queue for the async pipeline worker
   # minio:
@@ -36,5 +67,5 @@ services:
 
 volumes:
   lip-data:
-  # pg-data:
+  pg-data:
   # minio-data:

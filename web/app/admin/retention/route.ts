@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const service = getService();
 
   try {
-    service.runRetention(INSTITUTION_ID, identity!);
+    await service.runRetention(INSTITUTION_ID, identity!);
   } catch (e) {
     if (e instanceof AuthorizationError) return forbidResponse();
     throw e;

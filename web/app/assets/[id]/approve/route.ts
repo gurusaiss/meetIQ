@@ -14,7 +14,7 @@ export async function POST(
   const service = getService();
 
   try {
-    const approved = service.approveAsset(INSTITUTION_ID, assetId, identity);
+    const approved = await service.approveAsset(INSTITUTION_ID, assetId, identity);
     return NextResponse.redirect(
       new URL(`/lectures/${encodeURIComponent(approved.lectureId)}/review`, req.url),
       { status: 303 },

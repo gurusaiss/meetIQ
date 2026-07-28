@@ -7,7 +7,7 @@ export default async function DashboardPage() {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
 
-  const lectures = getRepo().listLecturesByCourse(identity.institutionId, COURSE_ID);
+  const lectures = await getRepo().listLecturesByCourse(identity.institutionId, COURSE_ID);
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);
 
   return (

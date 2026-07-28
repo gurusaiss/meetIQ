@@ -16,10 +16,10 @@ export default async function ReviewPage({
 
   const { id: lectureId } = await params;
   const { published, total } = await searchParams;
-  const lecture = getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
   if (!lecture) notFound();
 
-  const assets = getService().reviewQueue(INSTITUTION_ID, lectureId);
+  const assets = await getService().reviewQueue(INSTITUTION_ID, lectureId);
   const approvedCount = assets.filter((a) => a.status === "approved").length;
 
   return (

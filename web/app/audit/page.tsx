@@ -8,8 +8,8 @@ export default async function AuditPage() {
   if (!hasRole(identity, ["admin"])) forbidden();
   const repo = getRepo();
 
-  const events = repo.listAudit(INSTITUTION_ID);
-  const inst = repo.getInstitution(INSTITUTION_ID);
+  const events = await repo.listAudit(INSTITUTION_ID);
+  const inst = await repo.getInstitution(INSTITUTION_ID);
 
   return (
     <>

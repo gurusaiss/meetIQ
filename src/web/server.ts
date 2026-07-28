@@ -10,9 +10,9 @@ import { createServer, type IncomingMessage } from "node:http";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { validateConfig } from "../config.ts";
+import { validateConfig, config } from "../config.ts";
 import { logger } from "../observability/logger.ts";
-import { SqliteRepository } from "../persistence/sqlite.ts";
+import { createRepository } from "../persistence/index.ts";
 import {
   LectureService,
   ComplianceError,
@@ -58,12 +58,19 @@ if (configErrors.length) {
   process.exit(1);
 }
 
-// DATA_DIR lets tests/deploys point the store at a throwaway or mounted path.
+// DATA_DIR lets tests/deploys point the SQLite store at a throwaway or
+// mounted path. Ignored when REPO_DRIVER=postgres (uses DATABASE_URL instead).
 const dataDir = process.env.DATA_DIR
   ? process.env.DATA_DIR.replace(/\/?$/, "/")
   : fileURLToPath(new URL("../../data/", import.meta.url));
-mkdirSync(dataDir, { recursive: true });
-const repo = new SqliteRepository(dataDir + "lip.sqlite");
+if (config.repository.driver === "sqlite") mkdirSync(dataDir, { recursive: true });
+const repo = createRepository({
+  driver: config.repository.driver,
+  sqlitePath: dataDir + "lip.sqlite",
+  databaseUrl: config.repository.databaseUrl,
+  vectorDim: config.repository.vectorDim,
+});
+logger.info("repository.selected", { driver: config.repository.driver });
 const service = new LectureService(repo);
 const sessions = new SessionStore();
 // Login-endpoint abuse guard: 10 attempts / minute per client IP.
@@ -73,7 +80,9 @@ const lms = new MockLmsConnector();
 // External course identifier as it exists in the LMS/capture system.
 const EXTERNAL_COURSE = "CS101-2026S";
 
-service.seedInstitution(
+// Seeding must complete before the server accepts requests — with a real
+// network-backed adapter (Postgres) this is genuine I/O, not a formality.
+const seedInstitution = service.seedInstitution(
   {
     id: INSTITUTION_ID,
     name: "State University",
@@ -130,7 +139,7 @@ const server = createServer(async (req, res) => {
 
   // Liveness/readiness probe — no auth, checks the datastore.
   if (method === "GET" && (path === "/healthz" || path === "/readyz")) {
-    const dbOk = repo.healthcheck();
+    const dbOk = await repo.healthcheck();
     res.writeHead(dbOk ? 200 : 503, { "content-type": "application/json" });
     res.end(JSON.stringify({ status: dbOk ? "ok" : "degraded", db: dbOk ? "ok" : "down" }));
     return;
@@ -184,9 +193,8 @@ const server = createServer(async (req, res) => {
 
     // ── Dashboard ──
     if (method === "GET" && path === "/") {
-      return html(
-        dashboardPage(COURSE_TITLE, repo.listLecturesByCourse(INSTITUTION_ID, COURSE_ID), identity, nonce),
-      );
+      const lectures = await repo.listLecturesByCourse(INSTITUTION_ID, COURSE_ID);
+      return html(dashboardPage(COURSE_TITLE, lectures, identity, nonce));
     }
 
     // ── Create lecture (faculty/ta/admin) ──
@@ -206,7 +214,7 @@ const server = createServer(async (req, res) => {
           400,
         );
       }
-      service.createLecture({
+      await service.createLecture({
         institutionId: INSTITUTION_ID,
         courseId: COURSE_ID,
         lectureId,
@@ -263,7 +271,7 @@ const server = createServer(async (req, res) => {
     if (method === "POST" && m) {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const lectureId = decodeURIComponent(m[1]!);
-      const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
+      const lecture = await repo.getLecture(INSTITUTION_ID, lectureId);
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
       const count = await service.publishToLms(
         INSTITUTION_ID,
@@ -276,9 +284,8 @@ const server = createServer(async (req, res) => {
         count > 0
           ? `Published ${count} approved asset(s) to the LMS (mock connector). Total pushed this session: ${lms.published.length}.`
           : `Nothing to publish — approve at least one asset first.`;
-      return html(
-        reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, notice, nonce),
-      );
+      const queue = await service.reviewQueue(INSTITUTION_ID, lectureId);
+      return html(reviewPage(lecture, queue, identity, notice, nonce));
     }
 
     // ── Delete lecture (faculty/ta/admin) — right to erasure ──
@@ -286,7 +293,7 @@ const server = createServer(async (req, res) => {
     if (method === "POST" && m) {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       try {
-        service.deleteLecture(INSTITUTION_ID, decodeURIComponent(m[1]!), identity);
+        await service.deleteLecture(INSTITUTION_ID, decodeURIComponent(m[1]!), identity);
       } catch (e) {
         if (e instanceof AuthorizationError) return forbid();
         throw e;
@@ -299,22 +306,20 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && m) {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const lectureId = decodeURIComponent(m[1]!);
-      const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
+      const lecture = await repo.getLecture(INSTITUTION_ID, lectureId);
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
-      return html(
-        reviewPage(lecture, service.reviewQueue(INSTITUTION_ID, lectureId), identity, undefined, nonce),
-      );
+      const queue = await service.reviewQueue(INSTITUTION_ID, lectureId);
+      return html(reviewPage(lecture, queue, identity, undefined, nonce));
     }
 
     // ── Student view (any authenticated) ──
     m = path.match(/^\/lectures\/([^/]+)\/student$/);
     if (method === "GET" && m) {
       const lectureId = decodeURIComponent(m[1]!);
-      const lecture = repo.getLecture(INSTITUTION_ID, lectureId);
+      const lecture = await repo.getLecture(INSTITUTION_ID, lectureId);
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
-      return html(
-        studentPage(lecture, service.studentAssets(INSTITUTION_ID, lectureId), identity, nonce),
-      );
+      const assets = await service.studentAssets(INSTITUTION_ID, lectureId);
+      return html(studentPage(lecture, assets, identity, nonce));
     }
 
     // ── Approve asset (faculty/ta) ──
@@ -322,7 +327,7 @@ const server = createServer(async (req, res) => {
     if (method === "POST" && m) {
       const assetId = decodeURIComponent(m[1]!);
       try {
-        const approved = service.approveAsset(INSTITUTION_ID, assetId, identity);
+        const approved = await service.approveAsset(INSTITUTION_ID, assetId, identity);
         return redirect(`/lectures/${encodeURIComponent(approved.lectureId)}/review`);
       } catch (e) {
         if (e instanceof AuthorizationError) return forbid();
@@ -335,7 +340,7 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && m) {
       const lectureId = decodeURIComponent(m[1]!);
       const file = m[2]!;
-      const approved = service.studentAssets(INSTITUTION_ID, lectureId);
+      const approved = await service.studentAssets(INSTITUTION_ID, lectureId);
       const download = (body: string, type: string, name: string) =>
         html(body, 200, {
           "content-type": `${type}; charset=utf-8`,
@@ -366,15 +371,16 @@ const server = createServer(async (req, res) => {
     // ── Audit (admin only) ──
     if (method === "GET" && path === "/audit") {
       if (!hasRole(identity, ["admin"])) return forbid();
-      const inst = repo.getInstitution(INSTITUTION_ID);
-      return html(auditPage(repo.listAudit(INSTITUTION_ID), identity, inst?.retentionDays ?? 0, nonce));
+      const inst = await repo.getInstitution(INSTITUTION_ID);
+      const events = await repo.listAudit(INSTITUTION_ID);
+      return html(auditPage(events, identity, inst?.retentionDays ?? 0, nonce));
     }
 
     // ── Run retention (admin only) ──
     if (method === "POST" && path === "/admin/retention") {
       if (!hasRole(identity, ["admin"])) return forbid();
       try {
-        service.runRetention(INSTITUTION_ID, identity);
+        await service.runRetention(INSTITUTION_ID, identity);
       } catch (e) {
         if (e instanceof AuthorizationError) return forbid();
         throw e;
@@ -393,9 +399,16 @@ const server = createServer(async (req, res) => {
 });
 
 const PORT = Number(process.env.PORT ?? 3000);
-server.listen(PORT, () => {
-  logger.info("server.listening", { url: `http://localhost:${PORT}` });
-});
+seedInstitution
+  .then(() => {
+    server.listen(PORT, () => {
+      logger.info("server.listening", { url: `http://localhost:${PORT}` });
+    });
+  })
+  .catch((err) => {
+    logger.error("startup seed failed; refusing to start", { error: (err as Error).message });
+    process.exit(1);
+  });
 
 // Graceful shutdown — stop accepting connections, then close the datastore.
 // SIGTERM is the container/orchestrator signal (the prod path); SIGINT is
@@ -407,8 +420,7 @@ for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"] as const) {
     shuttingDown = true;
     logger.info("server.shutdown", { signal: sig });
     server.close(() => {
-      repo.close();
-      process.exit(0);
+      repo.close().finally(() => process.exit(0));
     });
     // Safety net if connections hang.
     setTimeout(() => process.exit(0), 5000).unref();

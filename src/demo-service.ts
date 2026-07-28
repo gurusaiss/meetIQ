@@ -18,7 +18,7 @@ function hr(s: string) {
 const repo = new SqliteRepository(":memory:");
 const service = new LectureService(repo);
 
-service.seedInstitution(
+await service.seedInstitution(
   {
     id: "inst-a",
     name: "State University",
@@ -30,7 +30,7 @@ service.seedInstitution(
 );
 
 hr("COMPLIANCE GATE (moat #2)");
-service.createLecture({
+await service.createLecture({
   institutionId: "inst-a",
   courseId: "cs101",
   lectureId: "lec-bad",
@@ -47,7 +47,7 @@ try {
 }
 
 hr("HAPPY PATH: create → process");
-service.createLecture({
+await service.createLecture({
   institutionId: "inst-a",
   courseId: "cs101",
   lectureId: "lec-1",
@@ -61,18 +61,20 @@ const assets = await service.processLecture("inst-a", "lec-1", {
 });
 
 hr("FACULTY REVIEW QUEUE (FR-14)");
-for (const a of service.reviewQueue("inst-a", "lec-1")) {
+for (const a of await service.reviewQueue("inst-a", "lec-1")) {
   console.log(
     `• ${a.type.padEnd(10)} status=${a.status.padEnd(9)} flagged=${(a.flagRatio * 100).toFixed(0)}%`,
   );
 }
-console.log(`\nStudent view before approval: ${service.studentAssets("inst-a", "lec-1").length} assets (correct — nothing released yet)`);
+const beforeApproval = await service.studentAssets("inst-a", "lec-1");
+console.log(`\nStudent view before approval: ${beforeApproval.length} assets (correct — nothing released yet)`);
 
 hr("FACULTY APPROVES (only faculty/TA may)");
 const notes = assets.find((a) => a.type === "notes")!;
-service.approveAsset("inst-a", notes.id, { id: "anika", role: "faculty" });
+await service.approveAsset("inst-a", notes.id, { id: "anika", role: "faculty" });
 console.log(`Approved "${notes.type}".`);
-console.log(`Student view now: ${service.studentAssets("inst-a", "lec-1").map((a) => a.type).join(", ") || "(none)"}`);
+const afterApproval = await service.studentAssets("inst-a", "lec-1");
+console.log(`Student view now: ${afterApproval.map((a) => a.type).join(", ") || "(none)"}`);
 
 hr("STUDENT: chat with the course");
 for (const q of ["How are collisions handled?", "When do we resize the table?"]) {
@@ -86,9 +88,9 @@ for (const q of ["How are collisions handled?", "When do we resize the table?"])
 }
 
 hr("AUDIT TRAIL (for the security/privacy officer)");
-for (const e of repo.listAudit("inst-a")) {
+for (const e of await repo.listAudit("inst-a")) {
   console.log(`  ${e.ts}  ${e.actor.padEnd(8)} ${e.action.padEnd(18)} ${e.target}`);
 }
 
-repo.close();
+await repo.close();
 console.log("\n✅ Lifecycle complete.\n");

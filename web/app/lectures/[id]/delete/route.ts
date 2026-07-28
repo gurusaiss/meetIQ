@@ -13,7 +13,7 @@ export async function POST(
   const { id: lectureId } = await params;
 
   try {
-    getService().deleteLecture(INSTITUTION_ID, lectureId, identity);
+    await getService().deleteLecture(INSTITUTION_ID, lectureId, identity);
   } catch (e) {
     if (e instanceof AuthorizationError) return forbidResponse();
     throw e;

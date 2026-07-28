@@ -12,7 +12,7 @@ export async function POST(
   const { id: lectureId } = await params;
   const lms = getLms();
 
-  const lecture = getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
   if (!lecture) return htmlError(404, "<h1>Lecture not found</h1>");
 
   const count = await getService().publishToLms(INSTITUTION_ID, lectureId, lms, EXTERNAL_COURSE, identity!);

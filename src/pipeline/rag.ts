@@ -24,7 +24,7 @@ export async function buildChunks(
   );
   const vectors = await embeddings.embed(texts);
   return topics.map((t, i) => ({
-    id: `chunk-${t.id}`,
+    id: `${transcript.lectureId}:chunk:${t.id}`,
     lectureId: transcript.lectureId,
     text: texts[i] ?? "",
     segmentIds: t.segmentIds,

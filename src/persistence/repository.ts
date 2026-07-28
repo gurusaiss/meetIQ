@@ -9,6 +9,12 @@
  *
  * Every method is tenant-scoped by `institutionId` (moat #2 isolation): a
  * caller cannot read another institution's data even by guessing ids.
+ *
+ * Every method is async (Promise-returning). The SQLite adapter's underlying
+ * calls are synchronous (node:sqlite), so it just wraps results in resolved
+ * promises — but the interface must be async because a real production
+ * adapter (Postgres over the network) cannot be synchronous, and the port
+ * should not lie about that to its callers.
  */
 import type { Transcript, KnowledgeAsset, Chunk, AssetStatus } from "../types.ts";
 
@@ -67,41 +73,41 @@ export interface AuditEvent {
 
 export interface Repository {
   // tenants & structure
-  upsertInstitution(i: Institution): void;
-  getInstitution(id: string): Institution | null;
-  upsertCourse(c: Course): void;
+  upsertInstitution(i: Institution): Promise<void>;
+  getInstitution(id: string): Promise<Institution | null>;
+  upsertCourse(c: Course): Promise<void>;
 
   // lectures
-  createLecture(l: Lecture): void;
-  setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): void;
-  getLecture(institutionId: string, lectureId: string): Lecture | null;
-  listLecturesByCourse(institutionId: string, courseId: string): Lecture[];
-  listLectures(institutionId: string): Lecture[];
+  createLecture(l: Lecture): Promise<void>;
+  setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): Promise<void>;
+  getLecture(institutionId: string, lectureId: string): Promise<Lecture | null>;
+  listLecturesByCourse(institutionId: string, courseId: string): Promise<Lecture[]>;
+  listLectures(institutionId: string): Promise<Lecture[]>;
   /** Right-to-erasure: removes the lecture and ALL derived data. */
-  deleteLecture(institutionId: string, lectureId: string): void;
+  deleteLecture(institutionId: string, lectureId: string): Promise<void>;
 
   // consent (moat #2)
-  saveConsent(c: ConsentRecord): void;
-  getConsent(institutionId: string, lectureId: string): ConsentRecord | null;
+  saveConsent(c: ConsentRecord): Promise<void>;
+  getConsent(institutionId: string, lectureId: string): Promise<ConsentRecord | null>;
 
   // pipeline outputs
-  saveTranscript(institutionId: string, t: Transcript): void;
-  getTranscript(institutionId: string, lectureId: string): Transcript | null;
+  saveTranscript(institutionId: string, t: Transcript): Promise<void>;
+  getTranscript(institutionId: string, lectureId: string): Promise<Transcript | null>;
 
-  saveAssets(institutionId: string, lectureId: string, assets: KnowledgeAsset[]): StoredAsset[];
-  getAsset(institutionId: string, assetId: string): StoredAsset | null;
-  listAssets(institutionId: string, lectureId: string): StoredAsset[];
-  setAssetStatus(institutionId: string, assetId: string, status: AssetStatus): void;
+  saveAssets(institutionId: string, lectureId: string, assets: KnowledgeAsset[]): Promise<StoredAsset[]>;
+  getAsset(institutionId: string, assetId: string): Promise<StoredAsset | null>;
+  listAssets(institutionId: string, lectureId: string): Promise<StoredAsset[]>;
+  setAssetStatus(institutionId: string, assetId: string, status: AssetStatus): Promise<void>;
 
-  saveChunks(institutionId: string, courseId: string, chunks: Chunk[]): void;
+  saveChunks(institutionId: string, courseId: string, chunks: Chunk[]): Promise<void>;
   /** All chunks for every lecture in a course — the RAG corpus for search. */
-  listCourseChunks(institutionId: string, courseId: string): Chunk[];
+  listCourseChunks(institutionId: string, courseId: string): Promise<Chunk[]>;
 
   // compliance
-  audit(e: AuditEvent): void;
-  listAudit(institutionId: string): AuditEvent[];
+  audit(e: AuditEvent): Promise<void>;
+  listAudit(institutionId: string): Promise<AuditEvent[]>;
 
   /** Liveness probe — true if the store answers a trivial query. */
-  healthcheck(): boolean;
-  close(): void;
+  healthcheck(): Promise<boolean>;
+  close(): Promise<void>;
 }

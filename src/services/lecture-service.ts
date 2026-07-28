@@ -55,13 +55,13 @@ export class LectureService {
     this.repo = repo;
   }
 
-  seedInstitution(i: Institution, course: Course): void {
-    this.repo.upsertInstitution(i);
-    this.repo.upsertCourse(course);
+  async seedInstitution(i: Institution, course: Course): Promise<void> {
+    await this.repo.upsertInstitution(i);
+    await this.repo.upsertCourse(course);
   }
 
-  createLecture(input: CreateLectureInput): Lecture {
-    const inst = this.repo.getInstitution(input.institutionId);
+  async createLecture(input: CreateLectureInput): Promise<Lecture> {
+    const inst = await this.repo.getInstitution(input.institutionId);
     if (!inst) throw new ComplianceError(`Unknown institution ${input.institutionId}`);
 
     const lecture: Lecture = {
@@ -73,7 +73,7 @@ export class LectureService {
       captureSource: input.captureSource,
       createdAt: new Date().toISOString(),
     };
-    this.repo.createLecture(lecture);
+    await this.repo.createLecture(lecture);
 
     const consent: ConsentRecord = {
       lectureId: input.lectureId,
@@ -82,8 +82,8 @@ export class LectureService {
       noticeShown: input.consent.noticeShown,
       optOuts: input.consent.optOuts ?? [],
     };
-    this.repo.saveConsent(consent);
-    this.audit(input.institutionId, "system", "lecture.created", input.lectureId);
+    await this.repo.saveConsent(consent);
+    await this.audit(input.institutionId, "system", "lecture.created", input.lectureId);
     return lecture;
   }
 
@@ -93,12 +93,12 @@ export class LectureService {
     lectureId: string,
     opts: { diarize?: boolean; speakerHints?: Record<string, string> } = {},
   ): Promise<StoredAsset[]> {
-    const lecture = this.repo.getLecture(institutionId, lectureId);
+    const lecture = await this.repo.getLecture(institutionId, lectureId);
     if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
 
-    this.assertConsent(institutionId, lectureId);
+    await this.assertConsent(institutionId, lectureId);
 
-    this.repo.setLectureStatus(institutionId, lectureId, "processing");
+    await this.repo.setLectureStatus(institutionId, lectureId, "processing");
     try {
       const result = await runPipeline({
         lectureId,
@@ -107,21 +107,21 @@ export class LectureService {
         ...(opts.speakerHints ? { speakerHints: opts.speakerHints } : {}),
       });
 
-      this.repo.saveTranscript(institutionId, result.transcript);
-      const stored = this.repo.saveAssets(institutionId, lectureId, result.assets);
-      this.repo.saveChunks(institutionId, lecture.courseId, result.chunks);
-      this.repo.setLectureStatus(institutionId, lectureId, "processed");
-      this.audit(institutionId, "system", "lecture.processed", lectureId);
+      await this.repo.saveTranscript(institutionId, result.transcript);
+      const stored = await this.repo.saveAssets(institutionId, lectureId, result.assets);
+      await this.repo.saveChunks(institutionId, lecture.courseId, result.chunks);
+      await this.repo.setLectureStatus(institutionId, lectureId, "processed");
+      await this.audit(institutionId, "system", "lecture.processed", lectureId);
       return stored;
     } catch (err) {
-      this.repo.setLectureStatus(institutionId, lectureId, "failed");
+      await this.repo.setLectureStatus(institutionId, lectureId, "failed");
       throw err;
     }
   }
 
   /** Compliance gate (moat #2). */
-  private assertConsent(institutionId: string, lectureId: string): void {
-    const consent = this.repo.getConsent(institutionId, lectureId);
+  private async assertConsent(institutionId: string, lectureId: string): Promise<void> {
+    const consent = await this.repo.getConsent(institutionId, lectureId);
     if (!consent) {
       throw new ComplianceError(`No consent record for lecture ${lectureId}`);
     }
@@ -133,32 +133,30 @@ export class LectureService {
   }
 
   /** Faculty approval gate (FR-14). Students never bypass this. */
-  approveAsset(institutionId: string, assetId: string, actor: Actor): StoredAsset {
+  async approveAsset(institutionId: string, assetId: string, actor: Actor): Promise<StoredAsset> {
     if (actor.role !== "faculty" && actor.role !== "ta") {
       throw new AuthorizationError(
         `Role ${actor.role} cannot approve assets; only faculty/TA can.`,
       );
     }
-    const asset = this.repo.getAsset(institutionId, assetId);
+    const asset = await this.repo.getAsset(institutionId, assetId);
     if (!asset) throw new Error(`Asset ${assetId} not found`);
-    this.repo.setAssetStatus(institutionId, assetId, "approved");
-    this.audit(institutionId, actor.id, "asset.approved", assetId);
+    await this.repo.setAssetStatus(institutionId, assetId, "approved");
+    await this.audit(institutionId, actor.id, "asset.approved", assetId);
     return { ...asset, status: "approved" };
   }
 
   /** What a student is allowed to see: approved assets only. */
-  studentAssets(institutionId: string, lectureId: string): StoredAsset[] {
-    return this.repo
-      .listAssets(institutionId, lectureId)
-      .filter((a) => a.status === "approved");
+  async studentAssets(institutionId: string, lectureId: string): Promise<StoredAsset[]> {
+    const assets = await this.repo.listAssets(institutionId, lectureId);
+    return assets.filter((a) => a.status === "approved");
   }
 
   /** What faculty sees in the review queue: everything, drafts first. */
-  reviewQueue(institutionId: string, lectureId: string): StoredAsset[] {
+  async reviewQueue(institutionId: string, lectureId: string): Promise<StoredAsset[]> {
     const order = { auto_held: 0, draft: 1, approved: 2 } as const;
-    return this.repo
-      .listAssets(institutionId, lectureId)
-      .sort((a, b) => order[a.status] - order[b.status]);
+    const assets = await this.repo.listAssets(institutionId, lectureId);
+    return assets.sort((a, b) => order[a.status] - order[b.status]);
   }
 
   /** Course-wide semantic search ("chat with the course"), with citations. */
@@ -168,40 +166,40 @@ export class LectureService {
     query: string,
     topK = 3,
   ): Promise<SearchHit[]> {
-    const chunks = this.repo.listCourseChunks(institutionId, courseId);
+    const chunks = await this.repo.listCourseChunks(institutionId, courseId);
     const embeddings = getEmbeddingsProvider();
-    this.audit(institutionId, "student", "course.search", courseId);
+    await this.audit(institutionId, "student", "course.search", courseId);
     return search(embeddings, chunks, query, topK);
   }
 
   /** Right-to-erasure. Faculty/TA/admin only. Removes all derived data. */
-  deleteLecture(institutionId: string, lectureId: string, actor: Actor): void {
+  async deleteLecture(institutionId: string, lectureId: string, actor: Actor): Promise<void> {
     if (!["faculty", "ta", "admin"].includes(actor.role)) {
       throw new AuthorizationError(`Role ${actor.role} cannot delete lectures.`);
     }
-    if (!this.repo.getLecture(institutionId, lectureId)) {
+    if (!(await this.repo.getLecture(institutionId, lectureId))) {
       throw new Error(`Lecture ${lectureId} not found`);
     }
-    this.repo.deleteLecture(institutionId, lectureId);
-    this.audit(institutionId, actor.id, "lecture.deleted", lectureId);
+    await this.repo.deleteLecture(institutionId, lectureId);
+    await this.audit(institutionId, actor.id, "lecture.deleted", lectureId);
   }
 
   /**
    * Retention enforcement (moat #2). Deletes lectures older than the tenant's
    * retentionDays. Admin only. `now` is injected for testability.
    */
-  runRetention(institutionId: string, actor: Actor, now: Date = new Date()): number {
+  async runRetention(institutionId: string, actor: Actor, now: Date = new Date()): Promise<number> {
     if (actor.role !== "admin") {
       throw new AuthorizationError(`Role ${actor.role} cannot run retention.`);
     }
-    const inst = this.repo.getInstitution(institutionId);
+    const inst = await this.repo.getInstitution(institutionId);
     if (!inst) throw new Error(`Unknown institution ${institutionId}`);
     const cutoff = new Date(now.getTime() - inst.retentionDays * 86_400_000).toISOString();
     let purged = 0;
-    for (const l of this.repo.listLectures(institutionId)) {
+    for (const l of await this.repo.listLectures(institutionId)) {
       if (l.createdAt < cutoff) {
-        this.repo.deleteLecture(institutionId, l.id);
-        this.audit(institutionId, actor.id, "lecture.purged", l.id);
+        await this.repo.deleteLecture(institutionId, l.id);
+        await this.audit(institutionId, actor.id, "lecture.purged", l.id);
         purged++;
       }
     }
@@ -227,8 +225,8 @@ export class LectureService {
     const imported: string[] = [];
     for (const rec of recordings) {
       const lectureId = rec.externalId.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      if (this.repo.getLecture(institutionId, lectureId)) continue; // idempotent
-      this.createLecture({
+      if (await this.repo.getLecture(institutionId, lectureId)) continue; // idempotent
+      await this.createLecture({
         institutionId,
         courseId,
         lectureId,
@@ -236,7 +234,7 @@ export class LectureService {
         captureSource: source.name,
         consent: { noticeShown: rec.consentCaptured },
       });
-      this.audit(institutionId, actor.id, "lecture.imported", lectureId);
+      await this.audit(institutionId, actor.id, "lecture.imported", lectureId);
       imported.push(lectureId);
     }
     return imported;
@@ -256,9 +254,8 @@ export class LectureService {
     if (!["faculty", "ta", "admin"].includes(actor.role)) {
       throw new AuthorizationError(`Role ${actor.role} cannot publish to the LMS.`);
     }
-    const approved = this.repo
-      .listAssets(institutionId, lectureId)
-      .filter((a) => a.status === "approved");
+    const allAssets = await this.repo.listAssets(institutionId, lectureId);
+    const approved = allAssets.filter((a) => a.status === "approved");
 
     const items: LmsItem[] = approved.map((a) => {
       if (a.type === "notes") {
@@ -290,12 +287,12 @@ export class LectureService {
 
     if (items.length === 0) return 0;
     const count = await connector.publish(externalCourseId, items);
-    this.audit(institutionId, actor.id, "lms.published", `${lectureId} (${count} items)`);
+    await this.audit(institutionId, actor.id, "lms.published", `${lectureId} (${count} items)`);
     return count;
   }
 
-  private audit(institutionId: string, actor: string, action: string, target: string): void {
-    this.repo.audit({
+  private async audit(institutionId: string, actor: string, action: string, target: string): Promise<void> {
+    await this.repo.audit({
       institutionId,
       actor,
       action,

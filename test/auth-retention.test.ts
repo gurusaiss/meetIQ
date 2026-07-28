@@ -23,15 +23,15 @@ const INST: Institution = {
 };
 const COURSE: Course = { id: "cs101", institutionId: "inst-a", code: "CS101", title: "DS" };
 
-function svc() {
+async function svc() {
   const repo = new SqliteRepository(":memory:");
   const service = new LectureService(repo);
-  service.seedInstitution(INST, COURSE);
+  await service.seedInstitution(INST, COURSE);
   return { repo, service };
 }
 
 async function makeProcessed(service: LectureService, id = "lec-1") {
-  service.createLecture({
+  await service.createLecture({
     institutionId: "inst-a",
     courseId: "cs101",
     lectureId: id,
@@ -97,19 +97,19 @@ test("rate limiter tracks keys independently and resets after the window", () =>
 
 // ── deletion (right to erasure) ──
 test("faculty can delete a lecture and all derived data is gone", async () => {
-  const { repo, service } = svc();
+  const { repo, service } = await svc();
   await makeProcessed(service);
-  service.deleteLecture("inst-a", "lec-1", { id: "anika", role: "faculty" });
-  assert.equal(repo.getLecture("inst-a", "lec-1"), null);
-  assert.equal(repo.getTranscript("inst-a", "lec-1"), null);
-  assert.equal(repo.listAssets("inst-a", "lec-1").length, 0);
-  assert.equal(repo.listCourseChunks("inst-a", "cs101").length, 0);
+  await service.deleteLecture("inst-a", "lec-1", { id: "anika", role: "faculty" });
+  assert.equal(await repo.getLecture("inst-a", "lec-1"), null);
+  assert.equal(await repo.getTranscript("inst-a", "lec-1"), null);
+  assert.equal((await repo.listAssets("inst-a", "lec-1")).length, 0);
+  assert.equal((await repo.listCourseChunks("inst-a", "cs101")).length, 0);
 });
 
 test("students cannot delete lectures", async () => {
-  const { service } = svc();
+  const { service } = await svc();
   await makeProcessed(service);
-  assert.throws(
+  await assert.rejects(
     () => service.deleteLecture("inst-a", "lec-1", { id: "sam", role: "student" }),
     AuthorizationError,
   );
@@ -117,7 +117,7 @@ test("students cannot delete lectures", async () => {
 
 // ── retention ──
 test("retention purges lectures older than retentionDays, keeps recent ones", async () => {
-  const { repo, service } = svc();
+  const { repo, service } = await svc();
   // Insert an old lecture directly with a backdated createdAt (400 days ago).
   const old: Lecture = {
     id: "lec-old",
@@ -128,19 +128,19 @@ test("retention purges lectures older than retentionDays, keeps recent ones", as
     captureSource: "upload",
     createdAt: new Date(Date.now() - 400 * 86_400_000).toISOString(),
   };
-  repo.createLecture(old);
-  repo.saveConsent({ lectureId: "lec-old", institutionId: "inst-a", policy: "all_party", noticeShown: true, optOuts: [] });
+  await repo.createLecture(old);
+  await repo.saveConsent({ lectureId: "lec-old", institutionId: "inst-a", policy: "all_party", noticeShown: true, optOuts: [] });
   await makeProcessed(service, "lec-recent");
 
-  const purged = service.runRetention("inst-a", { id: "root", role: "admin" });
+  const purged = await service.runRetention("inst-a", { id: "root", role: "admin" });
   assert.equal(purged, 1);
-  assert.equal(repo.getLecture("inst-a", "lec-old"), null);
-  assert.ok(repo.getLecture("inst-a", "lec-recent"));
+  assert.equal(await repo.getLecture("inst-a", "lec-old"), null);
+  assert.ok(await repo.getLecture("inst-a", "lec-recent"));
 });
 
-test("only admin can run retention", () => {
-  const { service } = svc();
-  assert.throws(
+test("only admin can run retention", async () => {
+  const { service } = await svc();
+  await assert.rejects(
     () => service.runRetention("inst-a", { id: "anika", role: "faculty" }),
     AuthorizationError,
   );

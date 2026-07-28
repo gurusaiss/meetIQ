@@ -117,7 +117,7 @@ once flows are proven; built runnably first so it can be verified today.
 npm run web           # ← the app at http://localhost:3000
 npm run demo          # value-engine pipeline on the sample far-field lecture
 npm run demo:service  # full institutional lifecycle (consent→process→approve→search→audit)
-npm test              # 14 tests (pipeline + persistence + gates + isolation)
+npm test              # pipeline + persistence + gates + isolation (SQLite by default)
 
 # optional, for the type layer:
 npm install
@@ -126,19 +126,36 @@ npm run typecheck
 
 Requires **Node 24+** (TypeScript type-stripping + `node:sqlite` with no extra flags).
 
+### Running against Postgres+pgvector instead of SQLite
+`Repository` is a port with two adapters, selected via `REPO_DRIVER`:
+```bash
+docker run -d --name lip-pg -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=lip \
+  -p 55432:5432 pgvector/pgvector:pg16
+
+REPO_DRIVER=postgres DATABASE_URL=postgres://postgres:devpass@localhost:55432/lip npm run web
+
+# same env vars enable the Postgres-backed integration tests:
+DATABASE_URL=postgres://postgres:devpass@localhost:55432/lip npm test
+```
+`EMBEDDING_VECTOR_DIM` (default 256) sets the `vector(n)` column width — fixed
+at first `CREATE TABLE`, so every adapter instance pointed at the same
+database must agree on it.
+
 ## Deploy
 
 ```bash
-docker compose up --build      # app on http://localhost:3000, data in a volume
+docker compose up --build                  # app on :3000, SQLite in a volume
+docker compose --profile postgres up --build   # app + real Postgres+pgvector
 ```
 
 The image runs the app directly (no build step — Node strips types at runtime)
-with a `/healthz` container healthcheck. `docker-compose.yml` also scaffolds the
-future production dependencies (Postgres+pgvector, Redis for the pipeline worker,
-MinIO for media), commented out until those adapters land.
+with a `/healthz` container healthcheck. `docker-compose.yml` scaffolds Redis
+(pipeline worker queue) and MinIO (media storage) commented out until those
+adapters land.
 
 CI (`.github/workflows/ci.yml`) runs `typecheck` + the full test suite on every
-push/PR.
+push/PR, plus a dedicated job running the suite again against a real
+Postgres+pgvector service container (`DATABASE_URL` set) to cover the adapter.
 
 ### Using real providers
 The real engines are implemented (AssemblyAI transcription via `fetch`; Claude
@@ -170,7 +187,7 @@ src/
   providers/
     transcription/         mock | assemblyai (swappable — moat #1)
     llm/                   mock | anthropic  (returns drafts with claimed refs)
-    embeddings/            mock (pgvector-backed in Inc 2)
+    embeddings/            mock (pgvector-backed storage lands in Inc 11)
   pipeline/
     grounding.ts           hallucination guard + confidence propagation
     segment.ts             topic segmentation
@@ -178,8 +195,10 @@ src/
     rag.ts                 chunking + semantic search with citations
     pipeline.ts            orchestrator
   persistence/
-    repository.ts          Repository PORT (tenant-scoped interface)
+    repository.ts          Repository PORT (tenant-scoped interface, async)
     sqlite.ts              zero-dep adapter (built-in node:sqlite)
+    postgres.ts            production adapter (pg + real pgvector columns)
+    index.ts                createRepository(...) factory (REPO_DRIVER)
   services/
     lecture-service.ts     lifecycle + compliance gate + faculty approval + audit
   demo.ts                  value-engine demo
@@ -217,10 +236,34 @@ The two presentation layers are independent and interchangeable — pick
 whichever fits your deploy target; the zero-dep server remains the
 dependency-free reference implementation.
 
+## What's built (Increment 11: Postgres + pgvector adapter)
+
+A second, production-grade `Repository` adapter (`src/persistence/postgres.ts`)
+alongside `SqliteRepository`, selected via `REPO_DRIVER`/`DATABASE_URL`
+(`src/persistence/index.ts`). `chunks.embedding` is a real `vector(n)` column,
+not inert JSON — semantic search runs as genuine pgvector similarity, not an
+in-process linear scan over deserialized floats.
+
+- The `Repository` port became fully `async` to honestly represent a
+  network-backed store — `SqliteRepository`'s synchronous-under-the-hood
+  nature had been masking two real correctness bugs (an un-awaited service
+  call inside a `try/catch` that let an `AuthorizationError` escape uncaught,
+  and an un-awaited `Promise` compared as truthy that meant a 404 branch
+  never fired). Both fixed once the interface change made them observable.
+- Exercising the adapter over real HTTP surfaced a genuine, pre-existing
+  **tenant-isolation bug in the pipeline** (not Postgres-specific): chunk ids
+  were unique only within one lecture's processing run, so two lectures with
+  the same topic count collided on the primary key and silently overwrote
+  each other's chunk content while leaving it attributed to the wrong
+  `institution_id`. Fixed by scoping chunk ids per lecture.
+- Verified against a live `pgvector/pgvector:pg16` container: CRUD + float
+  round-trip through `vector(256)`, tenant isolation, right-to-erasure, full
+  `LectureService` lifecycle parity, and an HTTP-driven
+  login→create→process→approve→student→search journey with real citable hits.
+
 ## Roadmap
 See Phase 12 in [`docs/DECISIONS.md`](docs/DECISIONS.md). Remaining, each
 blocked on a resource unavailable in the build environment rather than
-un-designed: live smoke-test of real providers (needs API keys), the
-Postgres+pgvector `Repository` adapter (needs a running Postgres + an
-async-port refactor), and building/verifying either `Dockerfile` (needs a
-running Docker daemon).
+un-designed: live smoke-test of real providers (needs API keys), and
+building/verifying either `Dockerfile` (needs a running Docker daemon) —
+the Postgres+pgvector adapter itself is now done (Increment 11, above).

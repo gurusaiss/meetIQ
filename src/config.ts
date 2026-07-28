@@ -30,6 +30,12 @@ export const config = {
     /** Assets with more than this fraction flagged are auto-held (NFR-1). */
     assetAutoHoldFlagRatio: num("ASSET_AUTOHOLD_FLAG_RATIO", 0.15),
   },
+  repository: {
+    /** `sqlite` (default, zero-dep) or `postgres` (prod target, needs a real DB). */
+    driver: str("REPO_DRIVER", "sqlite"),
+    databaseUrl: str("DATABASE_URL", ""),
+    vectorDim: num("EMBEDDING_VECTOR_DIM", 256),
+  },
 } as const;
 
 export type Config = typeof config;
@@ -38,6 +44,7 @@ const VALID = {
   transcription: ["mock", "assemblyai", "deepgram"],
   llm: ["mock", "anthropic"],
   embeddings: ["mock"],
+  repository: ["sqlite", "postgres"],
 };
 
 /**
@@ -53,16 +60,20 @@ export function validateConfig(c: Config = config): string[] {
     errors.push(`LLM_PROVIDER "${c.providers.llm}" is not one of ${VALID.llm.join(", ")}`);
   if (!VALID.embeddings.includes(c.providers.embeddings))
     errors.push(`EMBEDDINGS_PROVIDER "${c.providers.embeddings}" is not one of ${VALID.embeddings.join(", ")}`);
+  if (!VALID.repository.includes(c.repository.driver))
+    errors.push(`REPO_DRIVER "${c.repository.driver}" is not one of ${VALID.repository.join(", ")}`);
 
   const { confidenceFlagThreshold: t, assetAutoHoldFlagRatio: r } = c.quality;
   if (!(t >= 0 && t <= 1)) errors.push(`CONFIDENCE_FLAG_THRESHOLD must be in [0,1], got ${t}`);
   if (!(r >= 0 && r <= 1)) errors.push(`ASSET_AUTOHOLD_FLAG_RATIO must be in [0,1], got ${r}`);
 
-  // Selected real providers must have their key present.
+  // Selected real providers/adapters must have their key/connection present.
   if (c.providers.transcription === "assemblyai" && !c.keys.assemblyai)
     errors.push("TRANSCRIPTION_PROVIDER=assemblyai but ASSEMBLYAI_API_KEY is empty");
   if (c.providers.llm === "anthropic" && !c.keys.anthropic)
     errors.push("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is empty");
+  if (c.repository.driver === "postgres" && !c.repository.databaseUrl)
+    errors.push("REPO_DRIVER=postgres but DATABASE_URL is empty");
 
   return errors;
 }

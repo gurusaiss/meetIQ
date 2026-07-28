@@ -16,7 +16,7 @@ export async function GET(
   const identity = await getIdentity();
   if (!identity) return NextResponse.redirect(new URL("/login", req.url), { status: 303 });
   const { id: lectureId, file } = await params;
-  const approved = getService().studentAssets(INSTITUTION_ID, lectureId);
+  const approved = await getService().studentAssets(INSTITUTION_ID, lectureId);
 
   const download = (body: string, type: string, name: string) =>
     new NextResponse(body, {

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  getService().createLecture({
+  await getService().createLecture({
     institutionId: INSTITUTION_ID,
     courseId: COURSE_ID,
     lectureId,

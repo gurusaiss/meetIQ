@@ -2,7 +2,12 @@
  * SQLite adapter for the Repository port, on Node's built-in `node:sqlite`
  * (zero external dependencies). Suitable for local/dev and small pilots.
  * Embeddings are stored as JSON and searched in-app; the Postgres/pgvector
- * adapter (prod) will push vector search into the database instead.
+ * adapter (prod) pushes storage into a real `vector` column instead.
+ *
+ * Every method is `async` to satisfy the Repository port's signature, even
+ * though node:sqlite itself is synchronous — there is no I/O wait to hide
+ * here, just Promise-wrapping so callers don't need to know which adapter
+ * they're talking to.
  *
  * Tenant isolation is enforced in SQL: every read/write is filtered by
  * institution_id, so a wrong-tenant id simply returns nothing.
@@ -70,7 +75,7 @@ export class SqliteRepository implements Repository {
     this.db.exec(SCHEMA);
   }
 
-  upsertInstitution(i: Institution): void {
+  async upsertInstitution(i: Institution): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO institutions (id,name,consent_policy,data_region,retention_days)
@@ -82,7 +87,7 @@ export class SqliteRepository implements Repository {
       .run(i.id, i.name, i.consentPolicy, i.dataRegion, i.retentionDays);
   }
 
-  getInstitution(id: string): Institution | null {
+  async getInstitution(id: string): Promise<Institution | null> {
     const r = this.db
       .prepare(`SELECT * FROM institutions WHERE id=?`)
       .get(id) as Record<string, unknown> | undefined;
@@ -96,7 +101,7 @@ export class SqliteRepository implements Repository {
     };
   }
 
-  upsertCourse(c: Course): void {
+  async upsertCourse(c: Course): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO courses (id,institution_id,code,title) VALUES (?,?,?,?)
@@ -105,7 +110,7 @@ export class SqliteRepository implements Repository {
       .run(c.id, c.institutionId, c.code, c.title);
   }
 
-  createLecture(l: Lecture): void {
+  async createLecture(l: Lecture): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO lectures (id,institution_id,course_id,media_ref,status,capture_source,created_at)
@@ -122,13 +127,13 @@ export class SqliteRepository implements Repository {
       );
   }
 
-  setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): void {
+  async setLectureStatus(institutionId: string, lectureId: string, status: LectureStatus): Promise<void> {
     this.db
       .prepare(`UPDATE lectures SET status=? WHERE id=? AND institution_id=?`)
       .run(status, lectureId, institutionId);
   }
 
-  listLecturesByCourse(institutionId: string, courseId: string): Lecture[] {
+  async listLecturesByCourse(institutionId: string, courseId: string): Promise<Lecture[]> {
     const rows = this.db
       .prepare(
         `SELECT * FROM lectures WHERE course_id=? AND institution_id=? ORDER BY created_at`,
@@ -137,14 +142,14 @@ export class SqliteRepository implements Repository {
     return rows.map(rowToLecture);
   }
 
-  listLectures(institutionId: string): Lecture[] {
+  async listLectures(institutionId: string): Promise<Lecture[]> {
     const rows = this.db
       .prepare(`SELECT * FROM lectures WHERE institution_id=? ORDER BY created_at`)
       .all(institutionId) as Record<string, unknown>[];
     return rows.map(rowToLecture);
   }
 
-  deleteLecture(institutionId: string, lectureId: string): void {
+  async deleteLecture(institutionId: string, lectureId: string): Promise<void> {
     for (const table of ["assets", "chunks", "transcripts", "consent", "lectures"]) {
       const col = table === "lectures" ? "id" : "lecture_id";
       this.db
@@ -153,7 +158,7 @@ export class SqliteRepository implements Repository {
     }
   }
 
-  getLecture(institutionId: string, lectureId: string): Lecture | null {
+  async getLecture(institutionId: string, lectureId: string): Promise<Lecture | null> {
     const r = this.db
       .prepare(`SELECT * FROM lectures WHERE id=? AND institution_id=?`)
       .get(lectureId, institutionId) as Record<string, unknown> | undefined;
@@ -169,7 +174,7 @@ export class SqliteRepository implements Repository {
     };
   }
 
-  saveConsent(c: ConsentRecord): void {
+  async saveConsent(c: ConsentRecord): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO consent (lecture_id,institution_id,policy,notice_shown,opt_outs)
@@ -186,7 +191,7 @@ export class SqliteRepository implements Repository {
       );
   }
 
-  getConsent(institutionId: string, lectureId: string): ConsentRecord | null {
+  async getConsent(institutionId: string, lectureId: string): Promise<ConsentRecord | null> {
     const r = this.db
       .prepare(`SELECT * FROM consent WHERE lecture_id=? AND institution_id=?`)
       .get(lectureId, institutionId) as Record<string, unknown> | undefined;
@@ -200,7 +205,7 @@ export class SqliteRepository implements Repository {
     };
   }
 
-  saveTranscript(institutionId: string, t: Transcript): void {
+  async saveTranscript(institutionId: string, t: Transcript): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO transcripts (lecture_id,institution_id,language,provider,segments)
@@ -211,7 +216,7 @@ export class SqliteRepository implements Repository {
       .run(t.lectureId, institutionId, t.language, t.provider, JSON.stringify(t.segments));
   }
 
-  getTranscript(institutionId: string, lectureId: string): Transcript | null {
+  async getTranscript(institutionId: string, lectureId: string): Promise<Transcript | null> {
     const r = this.db
       .prepare(`SELECT * FROM transcripts WHERE lecture_id=? AND institution_id=?`)
       .get(lectureId, institutionId) as Record<string, unknown> | undefined;
@@ -224,11 +229,11 @@ export class SqliteRepository implements Repository {
     };
   }
 
-  saveAssets(
+  async saveAssets(
     institutionId: string,
     lectureId: string,
     assets: KnowledgeAsset[],
-  ): StoredAsset[] {
+  ): Promise<StoredAsset[]> {
     const stmt = this.db.prepare(
       `INSERT INTO assets (id,institution_id,lecture_id,type,status,content,flag_ratio,ungrounded_ratio)
        VALUES (?,?,?,?,?,?,?,?)`,
@@ -251,27 +256,27 @@ export class SqliteRepository implements Repository {
     return stored;
   }
 
-  getAsset(institutionId: string, assetId: string): StoredAsset | null {
+  async getAsset(institutionId: string, assetId: string): Promise<StoredAsset | null> {
     const r = this.db
       .prepare(`SELECT * FROM assets WHERE id=? AND institution_id=?`)
       .get(assetId, institutionId) as Record<string, unknown> | undefined;
     return r ? rowToAsset(r) : null;
   }
 
-  listAssets(institutionId: string, lectureId: string): StoredAsset[] {
+  async listAssets(institutionId: string, lectureId: string): Promise<StoredAsset[]> {
     const rows = this.db
       .prepare(`SELECT * FROM assets WHERE lecture_id=? AND institution_id=?`)
       .all(lectureId, institutionId) as Record<string, unknown>[];
     return rows.map(rowToAsset);
   }
 
-  setAssetStatus(institutionId: string, assetId: string, status: AssetStatus): void {
+  async setAssetStatus(institutionId: string, assetId: string, status: AssetStatus): Promise<void> {
     this.db
       .prepare(`UPDATE assets SET status=? WHERE id=? AND institution_id=?`)
       .run(status, assetId, institutionId);
   }
 
-  saveChunks(institutionId: string, courseId: string, chunks: Chunk[]): void {
+  async saveChunks(institutionId: string, courseId: string, chunks: Chunk[]): Promise<void> {
     const stmt = this.db.prepare(
       `INSERT INTO chunks (id,institution_id,lecture_id,course_id,text,segment_ids,start,embedding)
        VALUES (?,?,?,?,?,?,?,?)
@@ -291,7 +296,7 @@ export class SqliteRepository implements Repository {
     }
   }
 
-  listCourseChunks(institutionId: string, courseId: string): Chunk[] {
+  async listCourseChunks(institutionId: string, courseId: string): Promise<Chunk[]> {
     const rows = this.db
       .prepare(`SELECT * FROM chunks WHERE course_id=? AND institution_id=?`)
       .all(courseId, institutionId) as Record<string, unknown>[];
@@ -305,13 +310,13 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  audit(e: AuditEvent): void {
+  async audit(e: AuditEvent): Promise<void> {
     this.db
       .prepare(`INSERT INTO audit (institution_id,actor,action,target,ts) VALUES (?,?,?,?,?)`)
       .run(e.institutionId, e.actor, e.action, e.target, e.ts);
   }
 
-  listAudit(institutionId: string): AuditEvent[] {
+  async listAudit(institutionId: string): Promise<AuditEvent[]> {
     const rows = this.db
       .prepare(`SELECT * FROM audit WHERE institution_id=? ORDER BY ts`)
       .all(institutionId) as Record<string, unknown>[];
@@ -324,7 +329,7 @@ export class SqliteRepository implements Repository {
     }));
   }
 
-  healthcheck(): boolean {
+  async healthcheck(): Promise<boolean> {
     try {
       const r = this.db.prepare("SELECT 1 AS ok").get() as { ok: number } | undefined;
       return r?.ok === 1;
@@ -333,7 +338,7 @@ export class SqliteRepository implements Repository {
     }
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close();
   }
 }

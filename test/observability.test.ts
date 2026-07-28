@@ -21,6 +21,7 @@ function cfg(over: Partial<Config["providers"]>, quality?: Partial<Config["quali
     llmModel: "claude-sonnet-5",
     keys: { assemblyai: "", deepgram: "", anthropic: "" },
     quality: { confidenceFlagThreshold: 0.75, assetAutoHoldFlagRatio: 0.15, ...quality },
+    repository: { driver: "sqlite", databaseUrl: "", vectorDim: 256 },
   } as Config;
 }
 
@@ -44,8 +45,20 @@ test("validateConfig requires a key when a real provider is selected", () => {
   assert.equal(errs.some((e) => /ANTHROPIC_API_KEY/.test(e)), true);
 });
 
-test("repository healthcheck returns true for a live store", () => {
+test("validateConfig rejects an unknown REPO_DRIVER", () => {
+  const c = cfg({});
+  const errs = validateConfig({ ...c, repository: { ...c.repository, driver: "mongo" } });
+  assert.equal(errs.some((e) => /REPO_DRIVER/.test(e)), true);
+});
+
+test("validateConfig requires DATABASE_URL when REPO_DRIVER=postgres", () => {
+  const c = cfg({});
+  const errs = validateConfig({ ...c, repository: { ...c.repository, driver: "postgres" } });
+  assert.equal(errs.some((e) => /DATABASE_URL/.test(e)), true);
+});
+
+test("repository healthcheck returns true for a live store", async () => {
   const repo = new SqliteRepository(":memory:");
-  assert.equal(repo.healthcheck(), true);
-  repo.close();
+  assert.equal(await repo.healthcheck(), true);
+  await repo.close();
 });

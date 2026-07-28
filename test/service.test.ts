@@ -25,15 +25,15 @@ const COURSE: Course = {
   title: "Data Structures",
 };
 
-function svc() {
+async function svc() {
   const repo = new SqliteRepository(":memory:");
   const service = new LectureService(repo);
-  service.seedInstitution(INST, COURSE);
+  await service.seedInstitution(INST, COURSE);
   return { repo, service };
 }
 
 async function processed(service: LectureService, lectureId = "lec-1") {
-  service.createLecture({
+  await service.createLecture({
     institutionId: "inst-a",
     courseId: "course-cs101",
     lectureId,
@@ -45,18 +45,18 @@ async function processed(service: LectureService, lectureId = "lec-1") {
 }
 
 test("process persists transcript, assets, and chunks", async () => {
-  const { repo, service } = svc();
+  const { repo, service } = await svc();
   const assets = await processed(service);
   assert.equal(assets.length, 3);
-  assert.ok(repo.getTranscript("inst-a", "lec-1"));
-  assert.equal(repo.listAssets("inst-a", "lec-1").length, 3);
-  assert.equal(repo.listCourseChunks("inst-a", "course-cs101").length > 0, true);
-  assert.equal(repo.getLecture("inst-a", "lec-1")?.status, "processed");
+  assert.ok(await repo.getTranscript("inst-a", "lec-1"));
+  assert.equal((await repo.listAssets("inst-a", "lec-1")).length, 3);
+  assert.equal((await repo.listCourseChunks("inst-a", "course-cs101")).length > 0, true);
+  assert.equal((await repo.getLecture("inst-a", "lec-1"))?.status, "processed");
 });
 
 test("compliance gate blocks processing without consent notice (all-party tenant)", async () => {
-  const { service } = svc();
-  service.createLecture({
+  const { service } = await svc();
+  await service.createLecture({
     institutionId: "inst-a",
     courseId: "course-cs101",
     lectureId: "lec-noconsent",
@@ -73,16 +73,16 @@ test("compliance gate blocks processing without consent notice (all-party tenant
 });
 
 test("faculty approval gate: students cannot approve, faculty can", async () => {
-  const { service } = svc();
+  const { service } = await svc();
   const assets = await processed(service);
   const target = assets[0]!;
 
-  assert.throws(
+  await assert.rejects(
     () => service.approveAsset("inst-a", target.id, { id: "sam", role: "student" }),
     AuthorizationError,
   );
 
-  const approved = service.approveAsset("inst-a", target.id, {
+  const approved = await service.approveAsset("inst-a", target.id, {
     id: "anika",
     role: "faculty",
   });
@@ -90,24 +90,24 @@ test("faculty approval gate: students cannot approve, faculty can", async () => 
 });
 
 test("students only see approved assets", async () => {
-  const { service } = svc();
+  const { service } = await svc();
   const assets = await processed(service);
-  assert.equal(service.studentAssets("inst-a", "lec-1").length, 0); // none approved yet
-  service.approveAsset("inst-a", assets[0]!.id, { id: "anika", role: "faculty" });
-  assert.equal(service.studentAssets("inst-a", "lec-1").length, 1);
+  assert.equal((await service.studentAssets("inst-a", "lec-1")).length, 0); // none approved yet
+  await service.approveAsset("inst-a", assets[0]!.id, { id: "anika", role: "faculty" });
+  assert.equal((await service.studentAssets("inst-a", "lec-1")).length, 1);
 });
 
 test("tenant isolation: another institution cannot read the data", async () => {
-  const { repo, service } = svc();
+  const { repo, service } = await svc();
   await processed(service);
-  assert.equal(repo.getLecture("inst-b", "lec-1"), null);
-  assert.equal(repo.listAssets("inst-b", "lec-1").length, 0);
-  assert.equal(repo.getTranscript("inst-b", "lec-1"), null);
-  assert.equal(repo.listCourseChunks("inst-b", "course-cs101").length, 0);
+  assert.equal(await repo.getLecture("inst-b", "lec-1"), null);
+  assert.equal((await repo.listAssets("inst-b", "lec-1")).length, 0);
+  assert.equal(await repo.getTranscript("inst-b", "lec-1"), null);
+  assert.equal((await repo.listCourseChunks("inst-b", "course-cs101")).length, 0);
 });
 
 test("course search returns citable hits from persisted chunks", async () => {
-  const { service } = svc();
+  const { service } = await svc();
   await processed(service);
   const hits = await service.searchCourse("inst-a", "course-cs101", "collision resolution", 3);
   assert.equal(hits.length > 0, true);
@@ -115,10 +115,10 @@ test("course search returns citable hits from persisted chunks", async () => {
 });
 
 test("audit log records the compliance-relevant events", async () => {
-  const { repo, service } = svc();
+  const { repo, service } = await svc();
   const assets = await processed(service);
-  service.approveAsset("inst-a", assets[0]!.id, { id: "anika", role: "faculty" });
-  const actions = repo.listAudit("inst-a").map((e) => e.action);
+  await service.approveAsset("inst-a", assets[0]!.id, { id: "anika", role: "faculty" });
+  const actions = (await repo.listAudit("inst-a")).map((e) => e.action);
   assert.ok(actions.includes("lecture.created"));
   assert.ok(actions.includes("lecture.processed"));
   assert.ok(actions.includes("asset.approved"));
@@ -129,14 +129,14 @@ test("data persists to disk across repository reopen", async () => {
   try {
     const repo1 = new SqliteRepository(file);
     const s1 = new LectureService(repo1);
-    s1.seedInstitution(INST, COURSE);
+    await s1.seedInstitution(INST, COURSE);
     await processed(s1);
-    repo1.close();
+    await repo1.close();
 
     const repo2 = new SqliteRepository(file);
-    assert.equal(repo2.getLecture("inst-a", "lec-1")?.status, "processed");
-    assert.equal(repo2.listAssets("inst-a", "lec-1").length, 3);
-    repo2.close();
+    assert.equal((await repo2.getLecture("inst-a", "lec-1"))?.status, "processed");
+    assert.equal((await repo2.listAssets("inst-a", "lec-1")).length, 3);
+    await repo2.close();
   } finally {
     rmSync(file, { force: true });
   }
