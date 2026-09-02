@@ -15,7 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * extra plumbing on every dev rebuild. This mirrors Next's own official CSP
  * example. In production, CSS ships as external stylesheets regardless.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp = [
     "default-src 'self'",
