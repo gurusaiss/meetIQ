@@ -54,15 +54,17 @@ a{color:var(--brand);text-decoration:none}
 a:hover{text-decoration:underline}
 .wrap{max-width:920px;margin:0 auto;padding:24px 20px 64px}
 header.top{display:flex;align-items:center;justify-content:space-between;
-  padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  flex-wrap:wrap;gap:8px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
 header.top .brand{font-weight:700;letter-spacing:-.02em}
-header.top nav a{margin-left:16px;color:var(--muted);font-size:14px}
+header.top nav{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px}
+header.top nav a{color:var(--muted);font-size:14px}
 h1{font-size:22px;letter-spacing:-.02em;margin:24px 0 4px}
 h2{font-size:16px;margin:24px 0 8px}
 .sub{color:var(--muted);margin:0 0 16px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
   padding:16px 18px;margin:12px 0}
-.row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+@media(max-width:520px){.row{flex-direction:column;align-items:stretch}}
 .chip{display:inline-block;background:var(--chip);border-radius:999px;
   padding:2px 10px;font-size:12px;color:var(--muted)}
 .badge{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
@@ -124,8 +126,8 @@ export function layout(
   if (identity) {
     const adminLink = identity.role === "admin" ? `<a href="/audit">Audit</a>` : "";
     nav = `<nav><a href="/">Dashboard</a><a href="/search">Search</a>${adminLink}
-      <span class="chip" style="margin-left:16px">${esc(identity.name)} · ${esc(identity.role)}</span>
-      <form method="post" action="/logout" style="display:inline;margin-left:8px">
+      <span class="chip">${esc(identity.name)} · ${esc(identity.role)}</span>
+      <form method="post" action="/logout" style="display:inline">
         <button class="btn small ghost">Sign out</button></form></nav>`;
   }
   return `<!doctype html><html lang="en"><head>

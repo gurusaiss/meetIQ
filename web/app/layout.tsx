@@ -22,10 +22,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               <a href="/">Dashboard</a>
               <a href="/search">Search</a>
               {identity.role === "admin" && <a href="/audit">Audit</a>}
-              <span className="chip" style={{ marginLeft: 16 }}>
+              <span className="chip">
                 {identity.name} · {identity.role}
               </span>
-              <form action="/api/logout" method="post" style={{ display: "inline", marginLeft: 8 }}>
+              <form action="/api/logout" method="post" style={{ display: "inline" }}>
                 <button className="btn small ghost">Sign out</button>
               </form>
             </nav>
