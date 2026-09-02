@@ -205,12 +205,12 @@ src/
   demo-service.ts          full institutional lifecycle demo
 sample-data/               far-field lecture fixture (has low-confidence segments)
 test/                      node:test suite
-web/                       Next.js 15 App Router presentation layer (see below)
+web/                       Next.js 16 App Router presentation layer (see below)
 ```
 
 ## What's built (Increment 10: Next.js presentation layer)
 
-A second, real Next.js 15 App Router app under `web/` — the Phase 10 target
+A second, real Next.js 16 App Router app under `web/` — the Phase 10 target
 stack — reusing every file under `src/` **completely unchanged** (no port, no
 duplication). Same URL scheme and HTTP status codes as the zero-dep server, so
 both are backed by the identical `LectureService`/gates. Flashcard/quiz

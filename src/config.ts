@@ -51,6 +51,15 @@ export const config = {
      * any client bypass the login rate limiter by varying the header.
      */
     trustProxy: bool("TRUST_PROXY", false),
+    /**
+     * Whether the session cookie gets the `Secure` attribute (browser will
+     * only ever send it over HTTPS). Defaults to on in production and off
+     * in dev, since local dev serves plain HTTP and a `Secure` cookie the
+     * browser refuses to send there would silently break every login.
+     * Override with COOKIE_SECURE=0/1 for deployments that don't set
+     * NODE_ENV=production (e.g. behind a TLS-terminating proxy in staging).
+     */
+    secureCookies: bool("COOKIE_SECURE", process.env.NODE_ENV === "production"),
   },
 } as const;
 

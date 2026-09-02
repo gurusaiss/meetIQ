@@ -103,9 +103,10 @@ function readBody(req: IncomingMessage): Promise<URLSearchParams> {
 }
 
 function cookie(token: string, clear = false): string {
+  const secure = config.security.secureCookies ? "; Secure" : "";
   return clear
-    ? `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
-    : `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Lax`;
+    ? `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`
+    : `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Lax${secure}`;
 }
 
 const server = createServer(async (req, res) => {
@@ -173,8 +174,8 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       const name = (b.get("name") ?? "").trim();
       const role = (b.get("role") ?? "") as Role;
-      if (!name || !ROLES.includes(role))
-        return html(loginPage("Enter a name and valid role.", nonce), 400);
+      if (!name || name.length > 100 || !ROLES.includes(role))
+        return html(loginPage("Enter a name (under 100 characters) and valid role.", nonce), 400);
       const id: Identity = {
         id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         name,
@@ -258,6 +259,18 @@ const server = createServer(async (req, res) => {
             layout(
               "Blocked",
               `<h1>Processing blocked</h1><div class="notice">${e.message}</div>
+               <p style="margin-top:16px"><a href="/">← Dashboard</a></p>`,
+              identity,
+              nonce,
+            ),
+            409,
+          );
+        }
+        if (e instanceof ConflictError) {
+          return html(
+            layout(
+              "Error",
+              `<h1>Cannot process</h1><div class="notice">${e.message}</div>
                <p style="margin-top:16px"><a href="/">← Dashboard</a></p>`,
               identity,
               nonce,

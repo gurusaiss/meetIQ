@@ -148,6 +148,39 @@ test("creating a lecture with a duplicate id returns 409, not a raw 500", async 
   assert.equal(second.status, 409);
 });
 
+test("reprocessing an already-processed lecture returns 409, not a raw 500 that corrupts its status", async () => {
+  const login = await fetch(`${BASE}/api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const post = (path: string, body: string) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+      body,
+      redirect: "manual",
+    });
+  await post("/lectures", "lectureId=reproc-lec&captureSource=upload&noticeShown=on");
+  const firstProcess = await post("/lectures/reproc-lec/process", "diarize=on");
+  assert.equal(firstProcess.status, 303);
+  const secondProcess = await post("/lectures/reproc-lec/process", "diarize=on");
+  assert.equal(secondProcess.status, 409);
+
+  const dashboard = await fetch(`${BASE}/`, { headers: { cookie: faculty } });
+  const html = await dashboard.text();
+  // React renders "status: " and the value as separate text nodes with
+  // hydration comment markers between them, so match loosely rather than
+  // on an exact contiguous substring.
+  assert.match(
+    html,
+    /reproc-lec[\s\S]{0,200}status:[\s\S]{0,30}processed/,
+    "the earlier successful run's status must survive, not flip to failed",
+  );
+});
+
 test("full faculty→student journey over HTTP", async () => {
   const login = await fetch(`${BASE}/api/login`, {
     method: "POST",

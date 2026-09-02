@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
   const name = String(form.get("name") ?? "").trim();
   const role = String(form.get("role") ?? "") as Role;
 
-  if (!name || !ROLES.includes(role)) {
-    return errorPage(400, "Enter a name and valid role.");
+  if (!name || name.length > 100 || !ROLES.includes(role)) {
+    return errorPage(400, "Enter a name (under 100 characters) and valid role.");
   }
 
   const identity: Identity = {
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     httpOnly: true,
     path: "/",
     sameSite: "lax",
+    secure: config.security.secureCookies,
   });
   return res;
 }

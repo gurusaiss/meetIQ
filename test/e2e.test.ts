@@ -123,6 +123,32 @@ test("creating a lecture with a duplicate id returns 409, not a raw 500", async 
   assert.equal(second.status, 409);
 });
 
+test("reprocessing an already-processed lecture returns 409, not a raw 500 that corrupts its status", async () => {
+  const login = await fetch(`${BASE}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const post = (path: string, body: string) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: faculty },
+      body,
+      redirect: "manual",
+    });
+  await post("/lectures", "lectureId=reproc-lec&captureSource=upload&noticeShown=on");
+  const firstProcess = await post("/lectures/reproc-lec/process", "diarize=on");
+  assert.equal(firstProcess.status, 303);
+  const secondProcess = await post("/lectures/reproc-lec/process", "diarize=on");
+  assert.equal(secondProcess.status, 409);
+
+  const dashboard = await fetch(`${BASE}/`, { headers: { cookie: faculty } });
+  const html = await dashboard.text();
+  assert.match(html, /status: processed/, "the earlier successful run's status must survive, not flip to failed");
+});
+
 test("unauthenticated request redirects to login", async () => {
   const res = await fetch(`${BASE}/`, { redirect: "manual" });
   assert.equal(res.status, 303);

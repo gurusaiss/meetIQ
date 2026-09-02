@@ -55,6 +55,37 @@ test("process persists transcript, assets, and chunks", async () => {
   assert.equal((await repo.getLecture("inst-a", "lec-1"))?.status, "processed");
 });
 
+test("reprocessing an already-processed lecture raises ConflictError instead of corrupting its status", async () => {
+  const { repo, service } = await svc();
+  await processed(service, "lec-reprocess");
+  assert.equal((await repo.getLecture("inst-a", "lec-reprocess"))?.status, "processed");
+
+  await assert.rejects(
+    () => service.processLecture("inst-a", "lec-reprocess", { diarize: true }),
+    ConflictError,
+  );
+  // Critically: the earlier successful run's status must survive the
+  // rejected reprocess attempt — it must NOT flip to "failed".
+  assert.equal((await repo.getLecture("inst-a", "lec-reprocess"))?.status, "processed");
+});
+
+test("processing a lecture stuck in 'processing' (e.g. after a crash) is refused, not silently corrupted", async () => {
+  const { repo, service } = await svc();
+  await service.createLecture({
+    institutionId: "inst-a",
+    courseId: "course-cs101",
+    lectureId: "lec-stuck",
+    mediaRef: "media://x",
+    captureSource: "upload",
+    consent: { noticeShown: true },
+  });
+  await repo.setLectureStatus("inst-a", "lec-stuck", "processing");
+  await assert.rejects(
+    () => service.processLecture("inst-a", "lec-stuck", { diarize: true }),
+    ConflictError,
+  );
+});
+
 test("creating a lecture with an id that already exists raises ConflictError, not a raw DB error", async () => {
   const { service } = await svc();
   const input = {

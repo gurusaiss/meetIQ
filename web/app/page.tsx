@@ -38,6 +38,21 @@ export default async function DashboardPage() {
                   )}{" "}
                   {canManage && <DeleteLectureForm id={l.id} />}
                 </>
+              ) : l.status === "failed" || l.status === "processing" ? (
+                // Reprocessing in place isn't allowed (see the comment on
+                // LectureService.processLecture) — a lecture stuck here
+                // (a genuine failure, or a server crash mid-run) can only be
+                // recovered by delete + recreate, so don't offer a
+                // review/student link into a lecture with no valid content.
+                <>
+                  <span className="kpi">
+                    {l.status === "failed"
+                      ? "Processing failed."
+                      : "Still processing — if this persists, the run likely crashed."}{" "}
+                    {canManage ? "Delete and create it again to retry." : "Ask faculty to retry."}
+                  </span>{" "}
+                  {canManage && <DeleteLectureForm id={l.id} />}
+                </>
               ) : (
                 <>
                   {canManage && (

@@ -105,6 +105,24 @@ export class LectureService {
     const lecture = await this.repo.getLecture(institutionId, lectureId);
     if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
 
+    // Asset/chunk ids are deterministic per lecture (`${lectureId}:${type}:${i}`,
+    // `${lectureId}:chunk:${topicId}`) and the underlying inserts are plain
+    // INSERTs, not upserts — re-running the pipeline against a lecture that
+    // already has rows (processing/processed/failed-with-partial-writes)
+    // would hit a primary-key violation and flip a previously "processed"
+    // lecture to "failed", discarding nothing but *reporting* data loss.
+    // Reprocessing is a real recovery path a failed run needs, but silently
+    // upserting over faculty-approved content would be worse (an approve
+    // decision quietly reverting). So it's blocked outright here; the
+    // supported recovery for a failed lecture is delete (removes all derived
+    // data, already tested) + recreate, not an in-place retry.
+    if (lecture.status !== "created") {
+      throw new ConflictError(
+        `Lecture ${lectureId} is already ${lecture.status === "failed" ? "in a failed state" : lecture.status} — ` +
+          `delete it and create it again to retry processing.`,
+      );
+    }
+
     await this.assertConsent(institutionId, lectureId);
 
     await this.repo.setLectureStatus(institutionId, lectureId, "processing");

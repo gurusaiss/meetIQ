@@ -178,12 +178,20 @@ export function dashboardPage(
           const del = ["faculty", "ta", "admin"].includes(identity.role)
             ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/delete" style="display:inline" onsubmit="return confirm('Delete ${esc(l.id)} and all derived data?')"><button class="btn small ghost">Delete</button></form>`
             : "";
+          // "failed"/"processing" both mean the pipeline never completed
+          // (a genuine failure, or a server crash mid-run) — the only safe
+          // recovery is delete + recreate (reprocessing in place isn't
+          // allowed: see the comment on LectureService.processLecture), so
+          // point there instead of a misleading review/student link into a
+          // lecture with no valid — or no — content.
           const actions =
             l.status === "created"
               ? (canManage
                   ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/process" style="display:inline"><button class="btn small">Process</button></form> `
                   : "") + del
-              : `${canManage ? `<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/review">Faculty review</a> ` : ""}<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/student">Student view</a> ${del}`;
+              : l.status === "failed" || l.status === "processing"
+                ? `<span class="kpi">${l.status === "failed" ? "Processing failed." : "Still processing — if this persists, the run likely crashed."} ${canManage ? "Delete and create it again to retry." : "Ask faculty to retry."}</span> ${del}`
+                : `${canManage ? `<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/review">Faculty review</a> ` : ""}<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/student">Student view</a> ${del}`;
           return `<div class="card"><div class="row">
         <div><strong>${esc(l.id)}</strong> <span class="chip">${esc(l.captureSource)}</span>
           <div class="kpi">status: ${esc(l.status)} · created ${esc(l.createdAt.slice(0, 16).replace("T", " "))}</div></div>
