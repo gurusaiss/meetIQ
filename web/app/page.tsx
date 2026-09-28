@@ -13,10 +13,10 @@ export default async function DashboardPage() {
   return (
     <>
       <h1>{COURSE_TITLE}</h1>
-      <p className="sub">Turn in-person lecture recordings into study-ready, searchable knowledge.</p>
+      <p className="sub">Turn any recorded meeting, lecture, or gathering into a searchable, verified knowledge base.</p>
 
       {lectures.length === 0 && (
-        <p className="muted">No lectures yet.{canManage ? " Create one below." : ""}</p>
+        <p className="muted">No sessions yet.{canManage ? " Create one below." : ""}</p>
       )}
 
       {lectures.map((l) => (
@@ -87,9 +87,9 @@ export default async function DashboardPage() {
 
       {canManage && (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>New lecture</h2>
+          <h2 style={{ marginTop: 0 }}>New session</h2>
           <form action="/lectures" method="post">
-            <label htmlFor="new-lecture-id">Lecture id</label>
+            <label htmlFor="new-lecture-id">Session id</label>
             <input
               id="new-lecture-id"
               name="lectureId"
@@ -111,7 +111,7 @@ export default async function DashboardPage() {
               notice was shown to the room (required in all-party-consent regions)
             </label>
             <div style={{ marginTop: 14 }}>
-              <button className="btn">Create lecture</button>
+              <button className="btn">Create session</button>
             </div>
           </form>
         </div>

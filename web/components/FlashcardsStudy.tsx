@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Flashcard } from "../../src/types.ts";
+import { GroundingBadge } from "./GroundingBadge.tsx";
 
 /** Student view: click-to-flip, driven by real React state (no inline script). */
 export function FlashcardsStudy({ cards }: { cards: Flashcard[] }) {
@@ -35,7 +36,10 @@ function FlipCard({ card }: { card: Flashcard }) {
       ) : (
         <div style={{ marginTop: 8 }}>
           {card.back.text}
-          <div className="cite" style={{ marginTop: 6 }}>[{card.back.sourceRefs.join(", ")}]</div>
+          <div className="cite" style={{ marginTop: 6 }}>
+            [{card.back.sourceRefs.join(", ")}]
+            <GroundingBadge confidence={card.back.confidence} flagged={card.back.flagged} />
+          </div>
         </div>
       )}
     </div>

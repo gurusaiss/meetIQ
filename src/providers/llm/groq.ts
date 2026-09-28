@@ -1,4 +1,3 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import type { Transcript, TopicSegment } from "../../types.ts";
 import type {
   LLMProvider,
@@ -9,50 +8,45 @@ import type {
 } from "./types.ts";
 
 /**
- * Real Claude-backed provider via the official @anthropic-ai/sdk.
+ * Real free-tier LLM provider via Groq's OpenAI-compatible chat completions
+ * API, using `response_format: json_schema` with `strict: true` (constrained
+ * decoding — the model's output is guaranteed to match the schema, not just
+ * validated after the fact). Only a handful of models support `strict`
+ * mode; `openai/gpt-oss-120b` is confirmed to (per Groq's own structured-
+ * outputs docs) and is free-tier, so it's the default.
  *
- * Design:
- *  - Structured outputs (output_config.format) force schema-valid JSON.
- *  - Every prompt passes numbered transcript segments and REQUIRES the model
- *    to cite segment ids in `sourceRefs`. The pipeline's grounding guard then
- *    validates those ids — the model cannot fake grounding.
- *  - Cost tiering: `effort: "low"` for mechanical stages, thinking disabled
- *    for these extraction tasks (deterministic, cheaper).
+ * Same contract as the Anthropic provider: every prompt requires the model
+ * to cite real transcript segment ids in `sourceRefs`, and the pipeline's
+ * grounding guard (grounding.ts, untouched) validates them independently —
+ * this provider cannot mark its own homework any more than Anthropic's can.
  *
- * The SDK is imported dynamically so the mock path stays dependency-free; the
- * type-only import above is erased at runtime. NOTE: implemented against the
- * current Messages API but not yet exercised live here (no API key).
+ * Strict mode requires every schema property to be in `required` (optional
+ * fields are instead typed `[T, "null"]`) and `additionalProperties: false`
+ * on every object — both already true of the schemas below.
  */
+const BASE = "https://api.groq.com/openai/v1/chat/completions";
+
 type SchemaObject = Record<string, unknown>;
 
-export class AnthropicLLMProvider implements LLMProvider {
-  readonly name = "anthropic";
+export class GroqLLMProvider implements LLMProvider {
+  readonly name = "groq";
   private readonly apiKey: string;
   private readonly model: string;
-  private client: Anthropic | null = null;
 
-  constructor(apiKey: string, model = "claude-sonnet-5") {
+  constructor(apiKey: string, model = "openai/gpt-oss-120b") {
     if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic");
+      throw new Error("GROQ_API_KEY is required when LLM_PROVIDER=groq");
     }
     this.apiKey = apiKey;
     this.model = model;
-  }
-
-  private async getClient(): Promise<Anthropic> {
-    if (!this.client) {
-      const mod = await import("@anthropic-ai/sdk");
-      this.client = new mod.default({ apiKey: this.apiKey });
-    }
-    return this.client;
   }
 
   async segmentTopics(t: Transcript): Promise<TopicDraft> {
     return this.callJSON<TopicDraft>(
       "You segment a lecture transcript into coherent topics.",
       `Group the following transcript segments into topics, in order. Use ONLY the segment ids shown.\n\n${render(t)}`,
+      "topics",
       TOPIC_SCHEMA,
-      "low",
     );
   }
 
@@ -60,8 +54,8 @@ export class AnthropicLLMProvider implements LLMProvider {
     return this.callJSON<NotesDraft>(
       "You write faithful, exam-ready revision notes. Every point MUST be grounded in the transcript and cite the segment ids it is derived from. Do not invent facts.",
       `Write revision notes for these topics. For every point, set sourceRefs to the transcript segment ids that support it — cite only ids that appear below.\n\nTopics:\n${topics.map((x) => `- ${x.title} [${x.segmentIds.join(", ")}]`).join("\n")}\n\nTranscript:\n${render(t)}`,
+      "notes",
       NOTES_SCHEMA,
-      "medium",
     );
   }
 
@@ -69,8 +63,8 @@ export class AnthropicLLMProvider implements LLMProvider {
     return this.callJSON<FlashcardsDraft>(
       "You create spaced-repetition flashcards. Each card's answer MUST cite the transcript segment ids it is derived from.",
       `Create flashcards (front question, back answer) for these topics. Cite only segment ids shown.\n\nTopics:\n${topics.map((x) => `- ${x.title} [${x.segmentIds.join(", ")}]`).join("\n")}\n\nTranscript:\n${render(t)}`,
+      "flashcards",
       FLASHCARDS_SCHEMA,
-      "low",
     );
   }
 
@@ -78,32 +72,44 @@ export class AnthropicLLMProvider implements LLMProvider {
     return this.callJSON<QuizDraft>(
       "You write multiple-choice quiz questions. Exactly one option is correct (answerIndex). The explanation MUST cite the transcript segment ids it is derived from.",
       `Write one MCQ per topic. Each has 3-4 options, a correct answerIndex, and an explanation citing only segment ids shown.\n\nTopics:\n${topics.map((x) => `- ${x.title} [${x.segmentIds.join(", ")}]`).join("\n")}\n\nTranscript:\n${render(t)}`,
+      "quiz",
       QUIZ_SCHEMA,
-      "medium",
     );
   }
 
   private async callJSON<T>(
     system: string,
     user: string,
+    schemaName: string,
     schema: SchemaObject,
-    effort: "low" | "medium" | "high",
   ): Promise<T> {
-    const client = await this.getClient();
-    const response = await client.messages.create({
-      model: this.model,
-      max_tokens: 8000,
-      // Extraction tasks: thinking off for determinism + cost; effort tiers spend.
-      thinking: { type: "disabled" },
-      output_config: { format: { type: "json_schema", schema }, effort },
-      system,
-      messages: [{ role: "user", content: user }],
+    const res = await fetch(BASE, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: schemaName, strict: true, schema },
+        },
+      }),
     });
-    const text = response.content.find((b) => b.type === "text");
-    if (!text || text.type !== "text") {
-      throw new Error("Anthropic response contained no text block");
+    if (!res.ok) {
+      throw new Error(`Groq chat completion failed: ${res.status} ${await res.text()}`);
     }
-    return JSON.parse(text.text) as T;
+    const json = (await res.json()) as {
+      choices: Array<{ message: { content: string } }>;
+    };
+    const content = json.choices[0]?.message.content;
+    if (!content) throw new Error("Groq response contained no message content");
+    return JSON.parse(content) as T;
   }
 }
 
@@ -114,7 +120,8 @@ function render(t: Transcript): string {
     .join("\n");
 }
 
-// ── structured-output schemas (additionalProperties:false everywhere) ──
+// ── structured-output schemas (strict mode: additionalProperties:false,
+// every property required, everywhere) ──
 const REFS: SchemaObject = { type: "array", items: { type: "string" } };
 const STATEMENT: SchemaObject = {
   type: "object",

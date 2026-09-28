@@ -1,4 +1,5 @@
 import type { RevisionNotes } from "../../src/types.ts";
+import { GroundingBadge } from "./GroundingBadge.tsx";
 
 function mmss(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -18,8 +19,9 @@ export function NotesView({ notes }: { notes: RevisionNotes }) {
           {topic.points.map((p, j) => (
             <div className={`point${p.flagged ? " flagged" : ""}`} key={j}>
               {p.text} <span className="cite">[{p.sourceRefs.join(", ")}]</span>
+              <GroundingBadge confidence={p.confidence} flagged={p.flagged} />
               {p.flagged && (
-                <span className="flag-tag"> ⚠ low-confidence audio ({Math.round(p.confidence * 100)}%) — verify</span>
+                <span className="flag-tag"> — far-field audio, verify before relying on this</span>
               )}
             </div>
           ))}

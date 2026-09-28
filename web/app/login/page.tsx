@@ -14,8 +14,8 @@ export default async function LoginPage({
     <>
       <h1>Sign in</h1>
       <p className="sub">
-        In production this is your institution&apos;s SSO (SAML / LMS LTI). For this demo, choose an
-        identity.
+        In production this is your organization&apos;s SSO (SAML / LMS LTI). For this demo, choose
+        an identity.
       </p>
       {error && <div className="notice">{error}</div>}
       <div className="card">

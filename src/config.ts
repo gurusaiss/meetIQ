@@ -24,11 +24,13 @@ export const config = {
     llm: str("LLM_PROVIDER", "mock"),
     embeddings: str("EMBEDDINGS_PROVIDER", "mock"),
   },
-  llmModel: str("LLM_MODEL", "claude-sonnet-5"),
+  /** Empty means "use the selected provider's own default model". */
+  llmModel: str("LLM_MODEL", ""),
   keys: {
     assemblyai: str("ASSEMBLYAI_API_KEY", ""),
     deepgram: str("DEEPGRAM_API_KEY", ""),
     anthropic: str("ANTHROPIC_API_KEY", ""),
+    groq: str("GROQ_API_KEY", ""),
   },
   quality: {
     /** Segments below this are flagged as low-confidence (moat #1). */
@@ -66,9 +68,9 @@ export const config = {
 export type Config = typeof config;
 
 const VALID = {
-  transcription: ["mock", "assemblyai", "deepgram"],
-  llm: ["mock", "anthropic"],
-  embeddings: ["mock"],
+  transcription: ["mock", "assemblyai", "deepgram", "groq"],
+  llm: ["mock", "anthropic", "groq"],
+  embeddings: ["mock", "local"],
   repository: ["sqlite", "postgres"],
 };
 
@@ -95,8 +97,12 @@ export function validateConfig(c: Config = config): string[] {
   // Selected real providers/adapters must have their key/connection present.
   if (c.providers.transcription === "assemblyai" && !c.keys.assemblyai)
     errors.push("TRANSCRIPTION_PROVIDER=assemblyai but ASSEMBLYAI_API_KEY is empty");
+  if (c.providers.transcription === "groq" && !c.keys.groq)
+    errors.push("TRANSCRIPTION_PROVIDER=groq but GROQ_API_KEY is empty");
   if (c.providers.llm === "anthropic" && !c.keys.anthropic)
     errors.push("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is empty");
+  if (c.providers.llm === "groq" && !c.keys.groq)
+    errors.push("LLM_PROVIDER=groq but GROQ_API_KEY is empty");
   if (c.repository.driver === "postgres" && !c.repository.databaseUrl)
     errors.push("REPO_DRIVER=postgres but DATABASE_URL is empty");
 

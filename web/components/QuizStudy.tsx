@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Quiz } from "../../src/types.ts";
+import { GroundingBadge } from "./GroundingBadge.tsx";
 
 /** Student view: self-grading quiz runner, driven by real React state. */
 export function QuizStudy({ quiz }: { quiz: Quiz }) {
@@ -40,6 +41,7 @@ export function QuizStudy({ quiz }: { quiz: Quiz }) {
           {checked && (
             <div className="cite" style={{ marginTop: 8 }}>
               Why: {q.explanation.text} [{q.explanation.sourceRefs.join(", ")}]
+              <GroundingBadge confidence={q.explanation.confidence} flagged={q.explanation.flagged} />
             </div>
           )}
         </div>

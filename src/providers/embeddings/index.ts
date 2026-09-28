@@ -1,4 +1,5 @@
 import { config } from "../../config.ts";
+import { LocalEmbeddingsProvider } from "./local.ts";
 
 export interface EmbeddingsProvider {
   readonly name: string;
@@ -34,8 +35,13 @@ export function getEmbeddingsProvider(): EmbeddingsProvider {
   switch (config.providers.embeddings) {
     case "mock":
       return new MockEmbeddingsProvider();
+    case "local":
+      // The ONNX runtime + model are only actually loaded on the first
+      // `.embed()` call (see local.ts's own lazy pipeline cache) — merely
+      // constructing this class here doesn't pull in the heavy runtime
+      // when running on mock/other providers.
+      return new LocalEmbeddingsProvider();
     default:
-      // Real providers (Voyage/OpenAI/etc.) land in Increment 2.
       throw new Error(
         `Unknown or unimplemented EMBEDDINGS_PROVIDER: ${config.providers.embeddings}`,
       );

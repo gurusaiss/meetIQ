@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
+    "@huggingface/transformers": "^4.3.0",
     "pg": "^8.22.0"
   }
 }

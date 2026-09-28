@@ -1,269 +1,189 @@
-# Lecture Intelligence Platform (LIP)
+# MeetIQ
 
-> The compliant AI layer that turns a university's in-person lecture recordings into
-> study-ready, searchable knowledge — installed alongside Echo360/Panopto, not instead of them.
+> AI that turns any recorded meeting, lecture, or gathering into a searchable,
+> verified knowledge base.
 
-This repo is the product of a phased founder/engineering process. See
-[`docs/DECISIONS.md`](docs/DECISIONS.md) for the full market rationale and the
-architecture/technology decisions (compressed Phases 5–15).
-
-**Beachhead:** higher-education lecture intelligence.
-**Moats:** (1) far-field audio + confidence transparency, (2) compliance-first
-(FERPA/consent), (3) depth in 3 reused outputs, (4) integration with capture incumbents.
+**Live demo:** https://meetiq-28lj.onrender.com _(Render free tier — first
+load after inactivity can take 30-60s while the instance wakes up)_
 
 ---
 
-## What's built (Increment 1: the value engine)
+## The problem
 
-A runnable, tested TypeScript core of the AI pipeline (Phase 11):
+Recordings pile up — lectures, standups, all-hands, conference talks — and
+almost nobody goes back and actually reviews them. The AI summarizers that
+exist today make this worse in a specific way: they **hallucinate**. Ask a
+generic chatbot to summarize a transcript and it will confidently state
+things that were never actually said, with no way to tell which parts are
+real and which are invented.
+
+MeetIQ is built around one rule instead: **every generated statement must
+cite the exact transcript moment it came from, and that citation is checked
+in code, not just requested in a prompt.** If a statement can't be tied to a
+real moment in the recording, it doesn't ship.
+
+## How it works
 
 ```
-transcribe → topic-segment → [revision notes | flashcards | quiz] → embed / RAG index
-             └── with confidence propagation + a hallucination guard threaded through ──┘
+transcribe → segment into topics → generate (notes / flashcards / quiz) → embed & index
+                       └── confidence + grounding checked at every step ──┘
 ```
 
-It runs **with zero API keys and zero infrastructure** using mock providers.
-Real engines (AssemblyAI transcription, Claude generation, real embeddings) are
-drop-in behind stable provider interfaces — set env vars, no pipeline changes.
+1. **Transcribe** the recording (real speech-to-text, with per-segment
+   confidence — far-field/noisy audio scores lower, and that follows the
+   content downstream instead of being silently smoothed over).
+2. **Segment** the transcript into coherent topics.
+3. **Generate** revision notes, flashcards, and a quiz from those topics —
+   every single statement carries the transcript segment id(s) it's based on.
+4. **Verify.** The hallucination guard (below) checks those citations against
+   the real transcript before anything is stored. Statements that fail are
+   dropped, not shipped with a caveat.
+5. **Index & search.** Everything is embedded and stored so you can
+   semantically search across every session later, with the same
+   citation-back-to-the-exact-moment guarantee.
 
-### Why this core first
-It's the heart of the product and the home of the two hardest moats:
-- **Moat #1 (far-field trust):** every transcript segment carries a confidence
-  score; low-confidence (reverberant/distant) audio is flagged and propagates to
-  any note/card/quiz derived from it. Assets that are too shaky are `auto_held`
-  for faculty review instead of shipped to students.
-- **Hallucination guard:** every generated statement must cite real transcript
-  segment ids. The pipeline validates those ids — an LLM cannot fake grounding.
-  Ungrounded statements are dropped (quiz/flashcards) or excluded (notes).
+## The hallucination guard, concretely
 
-## What's built (Increment 2: persistence + service layer)
+This is the whole differentiator, so here it is in actual code —
+[`src/pipeline/grounding.ts`](src/pipeline/grounding.ts), untouched since it
+was first built:
 
-The pipeline output now survives, and two moats become *enforced rules* rather
-than data fields, via a **ports-and-adapters** design (a `Repository` interface
-with a zero-dependency adapter on Node's built-in SQLite; Postgres+pgvector is
-the drop-in prod adapter):
+```ts
+export function ground(
+  draft: StatementDraft,
+  segments: Map<string, TranscriptSegment>,
+  flagThreshold: number,
+): GroundedStatement & { ungrounded: boolean } {
+  const validRefs = draft.sourceRefs.filter((id) => segments.has(id));
+  const confidences = validRefs.map((id) => segments.get(id)!.confidence);
+  const confidence =
+    confidences.length > 0
+      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+      : 0;
+  const ungrounded = validRefs.length === 0;
+  return {
+    text: draft.text,
+    sourceRefs: validRefs,
+    confidence,
+    flagged: ungrounded || confidence < flagThreshold,
+    ungrounded,
+  };
+}
+```
 
-- **Compliance gate (moat #2):** an all-party-consent tenant cannot process a
-  lecture until a consent notice is recorded — `processLecture` throws otherwise.
-- **Faculty approval gate (FR-14):** only faculty/TA can approve an asset;
-  students only ever see `approved` assets.
-- **Tenant isolation:** every query is scoped by `institution_id`; a wrong-tenant
-  id returns nothing (tested).
-- **Audit trail:** every state change is logged for the security/privacy officer.
-- **Persisted course search:** "chat with the course" runs over stored chunks
-  with timestamp citations.
+The model can claim whatever citations it wants — `ground()` throws away any
+citation that doesn't map to a **real** transcript segment (`segments.has(id)`),
+and if nothing real is left, the statement is `ungrounded` and gets dropped
+before it ever reaches storage (see `pipeline/assets.ts`). This is why the
+LLM provider can be swapped (mock → Groq → Anthropic, see below) without
+touching this file at all: grounding doesn't trust the model, it checks it.
 
-## What's built (Increment 3: the clickable web UI)
+Confidence is derived the same way — averaged from the *cited* segments'
+own transcription confidence, so a statement built on mumbled, far-field
+audio is visibly flagged even if it's technically grounded. Every statement
+shown in the UI carries a visible **✓ Verified · X%** or **⚠ Low-confidence ·
+X%** badge — this isn't something you have to take on faith or have
+explained verbally, it's on screen next to every generated line.
 
-A server-rendered web app (zero-dependency, on Node's built-in `http`) that
-**reuses `LectureService` directly** — so the gates you click are the same
-enforced code the tests cover, not a UI reimplementation. Screens:
+## Tech stack
 
-- **Dashboard** — create a lecture (with a consent checkbox), process it.
-- **Faculty review** — assets shown with status badges; **low-confidence
-  far-field spans highlighted inline** with "verify" warnings; auto-held banner;
-  one-click *Approve & release*. Nothing reaches students unapproved.
-- **Student view** — approved materials only, now **interactive**: click-to-flip
-  flashcards and a self-grading quiz runner (vanilla JS). Plus one-click
-  **exports**: Markdown notes, **Anki-CSV flashcards**, Markdown quiz + answer key.
-- **Search** — "chat with the course" with timestamp citations.
-- **Audit** — the full compliance trail (admin only).
+| Layer | Choice | Why |
+|---|---|---|
+| App | Next.js 16 (App Router) | Route Handlers + Server Components for the whole flow |
+| Language | TypeScript, Node 24 | native `.ts` execution (no build step for the API layer) |
+| Transcription | **Groq Whisper** (`whisper-large-v3-turbo`) | free tier, real per-segment confidence via `avg_logprob` |
+| Generation | **Groq LLM** (`openai/gpt-oss-120b`, JSON-schema strict mode) | free tier, constrained decoding guarantees valid structured output |
+| Embeddings | **Local** (`@huggingface/transformers`, `all-MiniLM-L6-v2`, ONNX/WASM) | runs in-process — zero API key, zero network call, zero cost |
+| Persistence | SQLite (dev) / Postgres+pgvector (prod) | same `Repository` interface, swappable via `REPO_DRIVER` |
+| Deploy | Render (Docker) | matches the app's request-blocks-on-the-pipeline design — no serverless execution-time limit |
 
-Theme-aware (light/dark), responsive. Migrates to Next.js (the Phase 10 target)
-once flows are proven; built runnably first so it can be verified today.
+Every provider above sits behind a small interface
+(`src/providers/{transcription,llm,embeddings}`) with a mock implementation
+too — the whole pipeline runs with **zero API keys** on mocks, and the real
+stack above needs exactly **one** key (`GROQ_API_KEY`, free, no card).
 
-## What's built (Increment 5: auth + RBAC + retention)
-
-- **Sign-in / sessions** — a `/login` identity chooser standing in for SSO
-  (SAML/LTI is the drop-in prod adapter behind the same `Session` shape).
-- **Role-based access** on every route: students can't create/process/approve
-  or see the audit log (403); faculty/TA review & approve; admin runs audit +
-  retention. Enforced in both the service and the web layer.
-- **Right-to-erasure** — faculty/admin can delete a lecture and *all* derived
-  data (transcript, assets, chunks, consent).
-- **Retention** — admin runs a purge of lectures older than the tenant's
-  `retentionDays` (moat #2).
-
-## What's built (Increment 6: integrations — moat #4)
-
-- **Capture import** — pull recordings from Echo360/Panopto/Kaltura as lectures
-  (idempotent; consent seeded from the source). Mock source runs credential-free.
-- **LMS push** — deliver *approved* assets into Canvas/Moodle/Blackboard so
-  students stay in the tool they already use. Mock connector runs credential-free.
-- Both are ports-and-adapters (real vendor adapters are stubs that fail clearly
-  pending credentials), role-gated, and audited.
-
-## What's built (Increment 7: hardening & observability)
-
-- **Structured JSON logging** with per-request correlation ids (`x-request-id`).
-- **Startup config validation** — bad provider names, out-of-range thresholds, or
-  a real provider selected without its key fail fast with a clear message.
-- **Health probes** — `GET /healthz` / `/readyz` check the datastore.
-- **Graceful shutdown** on SIGTERM/SIGINT (the container path) and SIGBREAK.
-- 500 responses no longer leak internal error details to clients.
-
-## What's built (Increment 9: session lifecycle + accessibility)
-
-- **Session expiry** — sessions now time out after 8 hours instead of living
-  forever; login is rate-limited (10/min per client) against brute-force abuse.
-- **Accessibility (NFR-6)** — every form label is programmatically associated
-  with its input (`for`/`id`), a skip-to-content link, a `<main>` landmark,
-  and visible focus outlines.
-
-## Quick start
+## Setup
 
 ```bash
-# no install needed to run — mock providers + built-in SQLite, Node 22+ strips the TS
-npm run web           # ← the app at http://localhost:3000
-npm run demo          # value-engine pipeline on the sample far-field lecture
-npm run demo:service  # full institutional lifecycle (consent→process→approve→search→audit)
-npm test              # pipeline + persistence + gates + isolation (SQLite by default)
-
-# optional, for the type layer:
 npm install
+npm run web            # zero-dep server at http://localhost:3000, mock providers
+# or
+cd web && npm install && npm run dev   # Next.js app, mock providers
+```
+
+### Turning on the real (free-tier) providers
+
+```bash
+cp .env.example .env
+```
+```env
+TRANSCRIPTION_PROVIDER=groq
+LLM_PROVIDER=groq
+EMBEDDINGS_PROVIDER=local
+GROQ_API_KEY=...          # console.groq.com — free, no card required
+```
+`EMBEDDINGS_PROVIDER=local` needs no key at all — it downloads a small
+(~90MB) sentence-embedding model once and runs it in-process from then on.
+The first request after a cold start pays that download cost (tens of
+seconds); every request after is fast.
+
+### Tests
+
+```bash
+npm test               # pipeline + persistence + gates + isolation (61 tests)
 npm run typecheck
+cd web && npm test      # builds the Next app + drives the full HTTP journey
 ```
-
-Requires **Node 24+** (TypeScript type-stripping + `node:sqlite` with no extra flags).
-
-### Running against Postgres+pgvector instead of SQLite
-`Repository` is a port with two adapters, selected via `REPO_DRIVER`:
-```bash
-docker run -d --name lip-pg -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=lip \
-  -p 55432:5432 pgvector/pgvector:pg16
-
-REPO_DRIVER=postgres DATABASE_URL=postgres://postgres:devpass@localhost:55432/lip npm run web
-
-# same env vars enable the Postgres-backed integration tests:
-DATABASE_URL=postgres://postgres:devpass@localhost:55432/lip npm test
-```
-`EMBEDDING_VECTOR_DIM` (default 256) sets the `vector(n)` column width — fixed
-at first `CREATE TABLE`, so every adapter instance pointed at the same
-database must agree on it.
-
-## Deploy
-
-```bash
-docker compose up --build                  # app on :3000, SQLite in a volume
-docker compose --profile postgres up --build   # app + real Postgres+pgvector
-```
-
-The image runs the app directly (no build step — Node strips types at runtime)
-with a `/healthz` container healthcheck. `docker-compose.yml` scaffolds Redis
-(pipeline worker queue) and MinIO (media storage) commented out until those
-adapters land.
-
-CI (`.github/workflows/ci.yml`) runs `typecheck` + the full test suite on every
-push/PR, plus a dedicated job running the suite again against a real
-Postgres+pgvector service container (`DATABASE_URL` set) to cover the adapter.
-
-### Using real providers
-The real engines are implemented (AssemblyAI transcription via `fetch`; Claude
-generation via the official `@anthropic-ai/sdk` with structured outputs, model
-read from `LLM_MODEL`). Copy `.env.example` → `.env` and set:
-```
-TRANSCRIPTION_PROVIDER=assemblyai
-ASSEMBLYAI_API_KEY=...
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=...
-LLM_MODEL=claude-sonnet-5   # or claude-opus-4-8
-```
-The Claude provider requires the model to cite transcript segment ids for every
-generated statement; the pipeline's grounding guard then validates them, so the
-hallucination guard protects the real path exactly as it does the mock path.
-Mock stays the default and loads no SDK (the SDK is dynamic-import-gated).
-
-> Status: the real provider bodies are implemented against the current APIs and
-> typecheck clean, but have **not** yet been exercised against the live services
-> in this repo (no API keys here). Add keys to smoke-test end-to-end.
 
 ## Layout
 
 ```
-docs/DECISIONS.md          market + architecture decisions (Phases 5–15)
 src/
-  types.ts                 domain types (confidence + grounding are first-class)
-  config.ts                env-driven config, safe mock defaults
-  providers/
-    transcription/         mock | assemblyai (swappable — moat #1)
-    llm/                   mock | anthropic  (returns drafts with claimed refs)
-    embeddings/            mock (pgvector-backed storage lands in Inc 11)
+  types.ts                 domain types — confidence + grounding are first-class
   pipeline/
-    grounding.ts           hallucination guard + confidence propagation
-    segment.ts             topic segmentation
-    assets.ts              notes + flashcards + quiz, with quality gates
-    rag.ts                 chunking + semantic search with citations
-    pipeline.ts            orchestrator
-  persistence/
-    repository.ts          Repository PORT (tenant-scoped interface, async)
-    sqlite.ts              zero-dep adapter (built-in node:sqlite)
-    postgres.ts            production adapter (pg + real pgvector columns)
-    index.ts                createRepository(...) factory (REPO_DRIVER)
-  services/
-    lecture-service.ts     lifecycle + compliance gate + faculty approval + audit
-  demo.ts                  value-engine demo
-  demo-service.ts          full institutional lifecycle demo
-sample-data/               far-field lecture fixture (has low-confidence segments)
-test/                      node:test suite
-web/                       Next.js 16 App Router presentation layer (see below)
+    grounding.ts            the hallucination guard (see above)
+    segment.ts               topic segmentation
+    assets.ts                 notes + flashcards + quiz, quality-gated
+    rag.ts                     chunking + semantic search with citations
+  providers/
+    transcription/          mock | assemblyai | groq
+    llm/                     mock | anthropic | groq
+    embeddings/              mock | local
+  persistence/               Repository port: sqlite | postgres+pgvector adapters
+  services/lecture-service.ts  compliance gate + approval gate + audit, enforced
+web/                        Next.js 16 App Router presentation layer
+test/                       node:test suite
+docs/DECISIONS.md            full engineering log (market research → every increment)
 ```
 
-## What's built (Increment 10: Next.js presentation layer)
+## What's already built, briefly
 
-A second, real Next.js 16 App Router app under `web/` — the Phase 10 target
-stack — reusing every file under `src/` **completely unchanged** (no port, no
-duplication). Same URL scheme and HTTP status codes as the zero-dep server, so
-both are backed by the identical `LectureService`/gates. Flashcard/quiz
-interactivity is genuine React (`useState` client components), not the
-original inline `<script>`. CSP nonce via Next's own documented middleware
-pattern; genuine `403`s from Server Components via `forbidden()`.
+Full detail (every increment, every bug found and fixed, every trade-off) is
+in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
 
-```bash
-cd web
-npm install
-npm run dev      # http://localhost:3000 (dev mode)
-npm run build && npm start   # production build
-npm test         # builds + boots `next start` + drives the full journey over HTTP
-```
-
-Two disclosed, intentional differences from the zero-dep server's exact codes
-(both are *more correct* HTTP semantics): unauthenticated GET-page redirects
-are `307` (not `303` — 303 specifically means "convert POST to GET", which
-doesn't apply to a GET-to-GET redirect); `POST .../publish` redirects with a
-`?published=N` query notice instead of rendering the page inline at `200`.
-
-The two presentation layers are independent and interchangeable — pick
-whichever fits your deploy target; the zero-dep server remains the
-dependency-free reference implementation.
-
-## What's built (Increment 11: Postgres + pgvector adapter)
-
-A second, production-grade `Repository` adapter (`src/persistence/postgres.ts`)
-alongside `SqliteRepository`, selected via `REPO_DRIVER`/`DATABASE_URL`
-(`src/persistence/index.ts`). `chunks.embedding` is a real `vector(n)` column,
-not inert JSON — semantic search runs as genuine pgvector similarity, not an
-in-process linear scan over deserialized floats.
-
-- The `Repository` port became fully `async` to honestly represent a
-  network-backed store — `SqliteRepository`'s synchronous-under-the-hood
-  nature had been masking two real correctness bugs (an un-awaited service
-  call inside a `try/catch` that let an `AuthorizationError` escape uncaught,
-  and an un-awaited `Promise` compared as truthy that meant a 404 branch
-  never fired). Both fixed once the interface change made them observable.
-- Exercising the adapter over real HTTP surfaced a genuine, pre-existing
-  **tenant-isolation bug in the pipeline** (not Postgres-specific): chunk ids
-  were unique only within one lecture's processing run, so two lectures with
-  the same topic count collided on the primary key and silently overwrote
-  each other's chunk content while leaving it attributed to the wrong
-  `institution_id`. Fixed by scoping chunk ids per lecture.
-- Verified against a live `pgvector/pgvector:pg16` container: CRUD + float
-  round-trip through `vector(256)`, tenant isolation, right-to-erasure, full
-  `LectureService` lifecycle parity, and an HTTP-driven
-  login→create→process→approve→student→search journey with real citable hits.
+- **Compliance-by-construction**, not a feature flag: an all-party-consent
+  tenant can't process a recording until consent is recorded; nothing
+  reaches a viewer until an approver explicitly releases it; every
+  tenant is isolated by `institution_id` at the query level; every action
+  is audited; retention purges old data automatically.
+- **Two interchangeable presentation layers** — a zero-dependency Node
+  `http` server and a full Next.js 16 App Router app — both driven by the
+  identical service layer, so the gates you click are the gates the tests
+  cover, not a UI-only reimplementation.
+- **Two interchangeable persistence adapters** — SQLite (zero-dep, this
+  deploy) and Postgres+pgvector (real vector columns, tested against a live
+  instance) — behind one `Repository` port.
+- **Production hardening**: structured logging, health probes, session
+  expiry + login rate limiting, strict CSP, secure cookies, graceful
+  shutdown, and a handful of real bugs found by actually exercising the app
+  end-to-end rather than just reading the code (documented candidly in
+  `docs/DECISIONS.md` rather than swept under the rug).
 
 ## Roadmap
-See Phase 12 in [`docs/DECISIONS.md`](docs/DECISIONS.md). Remaining, each
-blocked on a resource unavailable in the build environment rather than
-un-designed: live smoke-test of real providers (needs API keys), and
-building/verifying either `Dockerfile` (needs a running Docker daemon) —
-the Postgres+pgvector adapter itself is now done (Increment 11, above).
+
+Not built yet, and why: a real async job queue (the pipeline currently runs
+inline within one HTTP request — fine for Groq's fast inference, but a
+genuine production system would decouple this with a worker + queue so a
+slow provider can't hold a request open); real capture-system/LMS
+integrations (Echo360/Canvas/etc. adapters exist as tested mocks with real
+adapters stubbed to fail clearly, pending real institutional credentials).

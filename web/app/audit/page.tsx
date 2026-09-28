@@ -20,7 +20,7 @@ export default async function AuditPage() {
           <div>
             <strong>Data retention</strong>
             <div className="kpi">
-              Tenant policy: delete lectures older than {inst?.retentionDays ?? 0} days.
+              Tenant policy: delete sessions older than {inst?.retentionDays ?? 0} days.
             </div>
           </div>
           <form action="/admin/retention" method="post">

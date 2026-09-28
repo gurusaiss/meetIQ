@@ -22,9 +22,9 @@ export default async function SearchPage({
 
   return (
     <>
-      <h1>Chat with the course</h1>
+      <h1>Chat with your sessions</h1>
       <p className="sub">
-        Semantic search across every lecture, with citations back to the exact moment.
+        Semantic search across every recorded session, with citations back to the exact moment.
       </p>
       <form method="get" action="/search">
         <div className="row">
@@ -43,7 +43,7 @@ export default async function SearchPage({
       </form>
       <div style={{ marginTop: 16 }}>
         {!query ? (
-          <p className="muted">Ask a question about anything covered in the course.</p>
+          <p className="muted">Ask a question about anything covered in your sessions.</p>
         ) : hits.length === 0 ? (
           <p className="muted">No matches.</p>
         ) : (

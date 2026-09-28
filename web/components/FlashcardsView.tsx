@@ -1,4 +1,5 @@
 import type { Flashcard } from "../../src/types.ts";
+import { GroundingBadge } from "./GroundingBadge.tsx";
 
 /** Faculty review: both sides shown stacked, no interactivity needed. */
 export function FlashcardsReview({ cards }: { cards: Flashcard[] }) {
@@ -10,7 +11,7 @@ export function FlashcardsReview({ cards }: { cards: Flashcard[] }) {
           <div>{c.front}</div>
           <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "10px 0" }} />
           <div className="muted" style={{ fontSize: 13 }}>
-            A {c.back.flagged && <span className="flag-tag">⚠</span>}
+            A <GroundingBadge confidence={c.back.confidence} flagged={c.back.flagged} />
           </div>
           <div>{c.back.text}</div>
           <div className="cite" style={{ marginTop: 6 }}>[{c.back.sourceRefs.join(", ")}]</div>

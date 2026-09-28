@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import { getIdentity } from "../lib/auth.ts";
 
 export const metadata = {
-  title: "Lecture Intelligence",
-  description: "Turn in-person lecture recordings into study-ready, searchable knowledge.",
+  title: "MeetIQ",
+  description:
+    "Turn any recorded meeting, lecture, or gathering into a searchable, verified knowledge base.",
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
@@ -16,7 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           Skip to content
         </a>
         <header className="top">
-          <div className="brand">📚 Lecture Intelligence</div>
+          <div className="brand">📚 MeetIQ</div>
           {identity && (
             <nav>
               <a href="/">Dashboard</a>

@@ -27,12 +27,12 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <h1>{lectureId} — study materials</h1>
-      <p className="sub">Approved, verified materials from your lecture.</p>
+      <p className="sub">Approved, verified materials from this session.</p>
 
       {assets.length === 0 ? (
         <div className="notice">
-          No materials have been released for this lecture yet. Your instructor reviews and
-          approves them first.
+          No materials have been released for this session yet. They're reviewed and approved
+          first.
         </div>
       ) : (
         assets.map((a) => (
@@ -52,7 +52,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
       )}
 
       <p style={{ marginTop: 24 }}>
-        <a href="/search">Search this course →</a> · <a href="/">← Dashboard</a>
+        <a href="/search">Search these sessions →</a> · <a href="/">← Dashboard</a>
       </p>
     </>
   );
