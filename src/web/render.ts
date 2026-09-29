@@ -242,6 +242,20 @@ export function dashboardPage(
   );
 }
 
+/**
+ * Makes the hallucination guard's verdict on ONE statement visible, not
+ * just something explained verbally. Every statement reaching this already
+ * passed grounding.ts (ungrounded ones are dropped before storage — see
+ * pipeline/assets.ts) — so this never renders "unverified"; it renders
+ * confidence, the more honest thing to show once a statement is already
+ * known to cite a real segment. Mirrors web/components/GroundingBadge.tsx.
+ */
+function groundingBadge(confidence: number, flagged: boolean): string {
+  const cls = flagged ? "b-held" : "b-approved";
+  const label = flagged ? `⚠ Low-confidence · ${pct(confidence)}` : `✓ Verified · ${pct(confidence)}`;
+  return `<span class="badge ${cls}" style="margin-left:6px">${label}</span>`;
+}
+
 function renderNotes(n: RevisionNotes): string {
   return n.topics
     .map(
@@ -251,8 +265,8 @@ function renderNotes(n: RevisionNotes): string {
         .map(
           (p) =>
             `<div class="point ${p.flagged ? "flagged" : ""}">${esc(p.text)}
-             <span class="cite">[${p.sourceRefs.map(esc).join(", ")}]</span>
-             ${p.flagged ? `<span class="flag-tag">⚠ low-confidence audio (${pct(p.confidence)}) — verify</span>` : ""}</div>`,
+             <span class="cite">[${p.sourceRefs.map(esc).join(", ")}]</span>${groundingBadge(p.confidence, p.flagged)}
+             ${p.flagged ? `<span class="flag-tag">— far-field audio, verify before relying on this</span>` : ""}</div>`,
         )
         .join("")}</div>`,
     )
@@ -264,7 +278,7 @@ function renderFlashcards(cards: Flashcard[]): string {
     .map(
       (c) => `<div class="card"><div class="muted" style="font-size:13px">Q</div>
       <div>${esc(c.front)}</div><hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
-      <div class="muted" style="font-size:13px">A ${c.back.flagged ? '<span class="flag-tag">⚠</span>' : ""}</div>
+      <div class="muted" style="font-size:13px">A${groundingBadge(c.back.confidence, c.back.flagged)}</div>
       <div>${esc(c.back.text)}</div>
       <div class="cite" style="margin-top:6px">[${c.back.sourceRefs.map(esc).join(", ")}]</div></div>`,
     )
@@ -281,7 +295,7 @@ function renderQuiz(q: Quiz): string {
         )
         .join("");
       return `<div class="card"><strong>Q${i + 1}. ${esc(qq.question)}</strong>
-        ${opts}<div class="cite" style="margin-top:8px">Why: ${esc(qq.explanation.text)} [${qq.explanation.sourceRefs.map(esc).join(", ")}]</div></div>`;
+        ${opts}<div class="cite" style="margin-top:8px">Why: ${esc(qq.explanation.text)} [${qq.explanation.sourceRefs.map(esc).join(", ")}]${groundingBadge(qq.explanation.confidence, qq.explanation.flagged)}</div></div>`;
     })
     .join("");
 }
