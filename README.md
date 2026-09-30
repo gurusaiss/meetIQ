@@ -1,4 +1,4 @@
-# MeetIQ
+# MeetIQ.
 
 > AI that turns any recorded meeting, lecture, or gathering into a searchable,
 > verified knowledge base.
