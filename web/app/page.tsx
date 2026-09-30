@@ -76,7 +76,7 @@ export default async function DashboardPage() {
           <div className="row">
             <div>
               <strong>Import from capture system</strong>
-              <div className="kpi">Pull existing recordings from Echo360/Panopto (moat #4). Demo uses a mock source.</div>
+              <div className="kpi">Pull existing recordings from Echo360/Panopto. Demo uses a mock source.</div>
             </div>
             <form action="/import" method="post">
               <button className="btn small">Import from Echo360 (demo)</button>
@@ -88,7 +88,7 @@ export default async function DashboardPage() {
       {canManage && (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>New session</h2>
-          <form action="/lectures" method="post">
+          <form action="/lectures" method="post" encType="multipart/form-data">
             <label htmlFor="new-lecture-id">Session id</label>
             <input
               id="new-lecture-id"
@@ -106,6 +106,9 @@ export default async function DashboardPage() {
               <option value="upload">Direct upload</option>
               <option value="room-capture">Room capture kit</option>
             </select>
+            <label htmlFor="new-media">Recording (audio or video, max 25 MB)</label>
+            <input id="new-media" type="file" name="media" accept="audio/*,video/*" />
+            <div className="kpi">Optional — without a file, the built-in sample transcript is used.</div>
             <label style={{ marginTop: 12 }}>
               <input type="checkbox" name="noticeShown" defaultChecked style={{ width: "auto" }} /> Recording-consent
               notice was shown to the room (required in all-party-consent regions)

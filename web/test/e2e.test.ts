@@ -18,7 +18,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -121,6 +121,32 @@ test("an invalid lecture id is rejected with 400", async () => {
     redirect: "manual",
   });
   assert.equal(res.status, 400);
+});
+
+test("an uploaded recording is saved under DATA_DIR/media and used as the mediaRef", async () => {
+  const login = await fetch(`${BASE}/api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+  const fd = new FormData();
+  fd.set("lectureId", "upload-lec");
+  fd.set("captureSource", "upload");
+  fd.set("noticeShown", "on");
+  fd.set("media", new File([bytes], "My Talk.MP3", { type: "audio/mpeg" }));
+  const res = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { cookie: faculty },
+    body: fd,
+    redirect: "manual",
+  });
+  assert.equal(res.status, 303);
+  const saved = join(dataDir, "media", "upload-lec.mp3");
+  assert.ok(existsSync(saved), "media file written to disk");
+  assert.deepEqual([...readFileSync(saved)], [1, 2, 3, 4, 5]);
 });
 
 test("creating a lecture with a duplicate id returns 409, not a raw 500", async () => {

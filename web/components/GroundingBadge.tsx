@@ -15,7 +15,7 @@ export function GroundingBadge({
 }) {
   const pct = Math.round(confidence * 100);
   return (
-    <span className={`badge ${flagged ? "b-held" : "b-approved"}`} style={{ marginLeft: 6 }}>
+    <span className={`badge gbadge ${flagged ? "b-held" : "b-approved"}`} style={{ marginLeft: 6 }}>
       {flagged ? `⚠ Low-confidence · ${pct}%` : `✓ Verified · ${pct}%`}
     </span>
   );

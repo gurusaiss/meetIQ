@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
     // checks in Server Components can return a genuine HTTP 403/401 instead
     // of a 200 response whose body merely says "forbidden".
     authInterrupts: true,
+    // proxy.ts buffers request bodies (default 10 MB); allow audio uploads up to the 25 MB cap.
+    proxyClientMaxBodySize: "30mb",
   },
 };
 

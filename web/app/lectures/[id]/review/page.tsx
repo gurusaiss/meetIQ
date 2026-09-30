@@ -43,7 +43,7 @@ export default async function ReviewPage({
           <div>
             <strong>Publish to LMS</strong>
             <div className="kpi">
-              Pushes {approvedCount} approved asset(s) into Canvas/Moodle (moat #4). Demo uses a
+              Pushes {approvedCount} approved asset(s) into Canvas/Moodle. Demo uses a
               mock connector.
             </div>
           </div>
