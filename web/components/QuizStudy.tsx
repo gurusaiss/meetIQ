@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Quiz } from "../../src/types.ts";
 import { GroundingBadge } from "./GroundingBadge.tsx";
+import { SrcChips } from "./SrcChips.tsx";
 
 /** Student view: self-grading quiz runner, driven by real React state. */
 export function QuizStudy({ quiz }: { quiz: Quiz }) {
@@ -17,7 +18,7 @@ export function QuizStudy({ quiz }: { quiz: Quiz }) {
     <div>
       {quiz.questions.map((q, i) => (
         <div className="card" key={i}>
-          <strong>Q{i + 1}. {q.question}</strong>
+          <strong><span className="qnum">{i + 1}</span>{q.question}</strong>
           {q.options.map((o, j) => {
             let cls = "opt";
             if (checked) {
@@ -39,16 +40,19 @@ export function QuizStudy({ quiz }: { quiz: Quiz }) {
             );
           })}
           {checked && (
-            <div className="cite" style={{ marginTop: 8 }}>
-              Why: {q.explanation.text} [{q.explanation.sourceRefs.join(", ")}]
-              <GroundingBadge confidence={q.explanation.confidence} flagged={q.explanation.flagged} />
+            <div className="cite" style={{ marginTop: 10 }}>
+              Why: {q.explanation.text}
+              <div style={{ marginTop: 6 }}>
+                <GroundingBadge confidence={q.explanation.confidence} flagged={q.explanation.flagged} />
+                <SrcChips refs={q.explanation.sourceRefs} />
+              </div>
             </div>
           )}
         </div>
       ))}
-      {checked && <div className="score">Score: {score} / {quiz.questions.length}</div>}
+      {checked && <div className="score">Score: {score} / {quiz.questions.length} 🎯</div>}
       <button className="btn" onClick={() => setChecked(true)}>
-        Check answers
+        Check answers ✓
       </button>
     </div>
   );

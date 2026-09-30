@@ -22,12 +22,13 @@ export default async function SearchPage({
 
   return (
     <>
-      <h1>Chat with your sessions</h1>
+      <span className="eyebrow">Search</span>
+      <h1>Ask your sessions anything</h1>
       <p className="sub">
         Semantic search across every recorded session, with citations back to the exact moment.
       </p>
       <form method="get" action="/search">
-        <div className="row">
+        <div className="searchbar">
           <label htmlFor="search-q" className="sr-only">
             Search question
           </label>
@@ -43,16 +44,21 @@ export default async function SearchPage({
       </form>
       <div style={{ marginTop: 16 }}>
         {!query ? (
-          <p className="muted">Ask a question about anything covered in your sessions.</p>
+          <div className="empty"><div className="big">💬</div>Ask a question about anything covered in your sessions.<br />Every answer links back to the exact moment it was said.</div>
         ) : hits.length === 0 ? (
-          <p className="muted">No matches.</p>
+          <div className="empty"><div className="big">🔎</div>No matches. Try different words.</div>
         ) : (
           hits.map((h, i) => (
-            <div className="card" key={i}>
+            <div className="card hit" key={i}>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <span className="ts">▶ {mmss(h.chunk.start)}</span>
+                <span className="score-bar" title={`relevance ${h.score.toFixed(2)}`}>
+                  <i style={{ width: `${Math.max(4, Math.min(100, Math.round(h.score * 100)))}%` }} />
+                </span>
+              </div>
               <div>{h.chunk.text}</div>
-              <div className="cite" style={{ marginTop: 8 }}>
-                cite {h.chunk.segmentIds.join(", ")} · @{mmss(h.chunk.start)} · score{" "}
-                {h.score.toFixed(2)}
+              <div className="cite" style={{ marginTop: 10 }}>
+                cite {h.chunk.segmentIds.join(", ")} · score {h.score.toFixed(2)}
               </div>
             </div>
           ))

@@ -26,11 +26,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <h1>{lectureId} — study materials</h1>
+      <span className="eyebrow">Study materials</span>
+      <h1>{lectureId}</h1>
       <p className="sub">Approved, verified materials from this session.</p>
 
       {assets.length === 0 ? (
-        <div className="notice">
+        <div className="empty">
+          <div className="big">🔒</div>
           No materials have been released for this session yet. They're reviewed and approved
           first.
         </div>
@@ -46,13 +48,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
                 </a>
               }
             />
-            <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "20px 0" }} />
-          </div>
+            </div>
         ))
       )}
 
       <p style={{ marginTop: 24 }}>
-        <a href="/search">Search these sessions →</a> · <a href="/">← Dashboard</a>
+        <a className="btn small" href="/search">Search these sessions →</a>{" "}
+        <a className="btn small ghost" href="/">← Dashboard</a>
       </p>
     </>
   );

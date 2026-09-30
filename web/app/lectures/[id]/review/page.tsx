@@ -24,7 +24,8 @@ export default async function ReviewPage({
 
   return (
     <>
-      <h1>Faculty review — {lectureId}</h1>
+      <span className="eyebrow">Faculty review</span>
+      <h1>{lectureId}</h1>
       <p className="sub">
         Nothing reaches students until you approve it. Low-confidence spans from far-field audio
         are highlighted.
@@ -37,6 +38,12 @@ export default async function ReviewPage({
             : "Nothing to publish — approve at least one asset first."}
         </div>
       )}
+
+      <div className="legend">
+        <span>How to read this:</span>
+        <span className="badge gbadge b-approved">✓ Verified · 92%</span> cited and clear audio
+        <span className="badge gbadge b-held">⚠ Low-confidence · 61%</span> cited, but audio was unclear
+      </div>
 
       <div className="card">
         <div className="row">
@@ -58,12 +65,11 @@ export default async function ReviewPage({
       {assets.map((a) => (
         <div key={a.id}>
           <AssetPanel asset={a} mode="review" />
-          <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "20px 0" }} />
         </div>
       ))}
 
       <p style={{ marginTop: 24 }}>
-        <a href="/">← Dashboard</a>
+        <a className="btn small ghost" href="/">← Dashboard</a>
       </p>
     </>
   );

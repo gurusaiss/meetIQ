@@ -10,7 +10,7 @@ export function DeleteLectureForm({ id }: { id: string }) {
         if (!confirm(`Delete ${id} and all derived data?`)) e.preventDefault();
       }}
     >
-      <button className="btn small ghost">Delete</button>
+      <button className="btn small danger">Delete</button>
     </form>
   );
 }

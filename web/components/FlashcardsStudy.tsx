@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Flashcard } from "../../src/types.ts";
 import { GroundingBadge } from "./GroundingBadge.tsx";
+import { SrcChips } from "./SrcChips.tsx";
 
 /** Student view: click-to-flip, driven by real React state (no inline script). */
 export function FlashcardsStudy({ cards }: { cards: Flashcard[] }) {
@@ -18,7 +19,7 @@ function FlipCard({ card }: { card: Flashcard }) {
   const [flipped, setFlipped] = useState(false);
   return (
     <div
-      className="card fc"
+      className={`card fc${flipped ? " flipped" : ""}`}
       role="button"
       tabIndex={0}
       aria-pressed={flipped}
@@ -30,15 +31,15 @@ function FlipCard({ card }: { card: Flashcard }) {
         }
       }}
     >
-      <div className="muted" style={{ fontSize: 13 }}>Flashcard — click to flip</div>
+      <div className="eyebrow">{flipped ? "Answer" : "Question"} · click to flip</div>
       {!flipped ? (
-        <div style={{ marginTop: 8 }}>{card.front}</div>
+        <div className="q">{card.front}</div>
       ) : (
-        <div style={{ marginTop: 8 }}>
+        <div className="q">
           {card.back.text}
-          <div className="cite" style={{ marginTop: 6 }}>
-            [{card.back.sourceRefs.join(", ")}]
+          <div style={{ marginTop: 10 }}>
             <GroundingBadge confidence={card.back.confidence} flagged={card.back.flagged} />
+            <SrcChips refs={card.back.sourceRefs} />
           </div>
         </div>
       )}

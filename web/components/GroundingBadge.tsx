@@ -15,7 +15,15 @@ export function GroundingBadge({
 }) {
   const pct = Math.round(confidence * 100);
   return (
-    <span className={`badge gbadge ${flagged ? "b-held" : "b-approved"}`} style={{ marginLeft: 6 }}>
+    <span
+      className={`badge gbadge ${flagged ? "b-held" : "b-approved"}`}
+      style={{ marginLeft: 6 }}
+      title={
+        flagged
+          ? "Cited, but the source audio was unclear — verify before relying on it"
+          : "Cited and backed by clear audio"
+      }
+    >
       {flagged ? `⚠ Low-confidence · ${pct}%` : `✓ Verified · ${pct}%`}
     </span>
   );

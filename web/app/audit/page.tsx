@@ -13,6 +13,7 @@ export default async function AuditPage() {
 
   return (
     <>
+      <span className="eyebrow">Compliance</span>
       <h1>Audit trail</h1>
       <p className="sub">Every compliance-relevant action, for the security &amp; privacy officer.</p>
       <div className="card">

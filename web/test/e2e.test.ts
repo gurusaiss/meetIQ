@@ -202,7 +202,7 @@ test("reprocessing an already-processed lecture returns 409, not a raw 500 that 
   // on an exact contiguous substring.
   assert.match(
     html,
-    /reproc-lec[\s\S]{0,200}status:[\s\S]{0,30}processed/,
+    /reproc-lec[\s\S]{0,300}b-approved">processed/,
     "the earlier successful run's status must survive, not flip to failed",
   );
 });
