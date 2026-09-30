@@ -157,6 +157,9 @@ label.check{display:flex;gap:10px;align-items:flex-start;font-weight:500;line-he
 .opt{display:flex;gap:10px;align-items:center;margin:8px 0;padding:11px 14px;border:1.5px solid var(--line);
   border-radius:12px;cursor:pointer;font-weight:500;color:var(--ink);background:var(--panel2);transition:border-color .12s}
 .opt:hover{border-color:var(--brand)}
+div.opt{cursor:default}
+div.opt:hover{border-color:var(--line)}
+div.opt.correct:hover{border-color:var(--ok)}
 .opt:has(input:checked){border-color:var(--brand);background:var(--brand-soft)}
 .opt.correct{background:var(--ok-bg);border-color:var(--ok)}
 .opt.wrong{background:var(--danger-bg);border-color:var(--danger)}

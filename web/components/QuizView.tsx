@@ -10,9 +10,10 @@ export function QuizReview({ quiz }: { quiz: Quiz }) {
         <div className="card" key={i}>
           <strong><span className="qnum">{i + 1}</span>{q.question}</strong>
           {q.options.map((o, j) => (
-            <div className="point" key={j}>
-              {j === q.answerIndex ? "✅ " : "○ "}
+            <div className={`opt${j === q.answerIndex ? " correct" : ""}`} key={j}>
+              <span aria-hidden="true">{j === q.answerIndex ? "✅" : "○"}</span>
               {o}
+              {j === q.answerIndex && <span className="sr-only"> (correct answer)</span>}
             </div>
           ))}
           <div className="cite" style={{ marginTop: 10 }}>
