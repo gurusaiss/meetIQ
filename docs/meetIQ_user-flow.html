@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeetIQ User Flow</title>
+<style>
+/*
+  Layout: vertical journey — Input -> Capture -> Grounding Engine (hero stage)
+  -> Generated Material -> Approval Gate -> Student Experience, with the
+  Adaptive Mastery Loop branching off quiz-taking, and a Compliance
+  Foundation band running underneath every stage.
+*/
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1a1c22; --muted:#5c6270;
+  --line:#e4e2dc; --accent:#4f46e5; --accent-ink:#ffffff;
+  --ok:#0f8a4b; --ok-bg:#e7f6ee; --warn:#a35b00; --warn-bg:#fdf1de;
+  --chip:#eeecf8; --found:#ece9e2;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+    --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+    --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+    --chip:#242a3a; --found:#1c2027; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+  --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+  --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+  --chip:#242a3a; --found:#1c2027; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  padding:32px 16px 48px}
+h1,h2,h3{font-family:'Sora',system-ui,sans-serif;letter-spacing:-.01em;text-wrap:balance;margin:0}
+.wrap{max-width:920px;margin:0 auto}
+header{text-align:center;margin-bottom:8px}
+header h1{font-size:26px;font-weight:700}
+header p{color:var(--muted);margin:8px 0 0;font-size:14.5px}
+
+.stage{position:relative;margin:0 auto;max-width:760px}
+.stage-label{display:flex;align-items:center;gap:10px;margin:36px 0 12px}
+.stage-num{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;font-family:'Sora',sans-serif}
+.stage-title{font-family:'Sora',sans-serif;font-weight:700;font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+
+.row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;flex:1 1 220px;min-width:0}
+.card h3{font-size:14.5px;font-weight:700;margin-bottom:4px}
+.card p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.card .icon{font-size:20px;margin-bottom:6px;display:block}
+
+.hero{background:linear-gradient(135deg,var(--accent),#8b7bf0);color:#fff;border:none;border-radius:16px;padding:22px 22px 20px;
+  box-shadow:0 8px 24px -8px rgba(79,70,229,.45)}
+.hero h3{color:#fff;font-size:16.5px;margin-bottom:6px}
+.hero p{color:rgba(255,255,255,.88)}
+.hero .rule{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;color:rgba(255,255,255,.95)}
+.hero .rule b{font-weight:700}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;
+  font-family:'IBM Plex Sans',sans-serif;white-space:nowrap}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.badge-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+
+.arrow{display:flex;justify-content:center;color:var(--muted);font-size:20px;margin:2px 0}
+
+.branch{border:1.5px dashed var(--line);border-radius:16px;padding:18px;margin-top:14px}
+.branch-title{font-family:'Sora',sans-serif;font-weight:700;font-size:13.5px;color:var(--accent);margin-bottom:12px;
+  display:flex;align-items:center;gap:6px}
+.loop-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.loop-row .card{flex:0 1 150px}
+.loop-arrow{color:var(--muted);font-size:16px;flex:none}
+.loop-back{text-align:center;margin-top:10px;font-size:12.5px;color:var(--muted);font-style:italic}
+
+.foundation{margin-top:44px;background:var(--found);border-radius:16px;padding:18px 20px;border:1px solid var(--line)}
+.foundation h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:10px;font-weight:700}
+.foundation .chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--chip);color:var(--ink);font-size:12.5px;padding:5px 11px;border-radius:8px;font-weight:500}
+
+@media (max-width:600px){
+  .row{flex-direction:column}
+  .card{flex:1 1 auto}
+  .loop-row{flex-direction:column}
+  .loop-arrow{transform:rotate(90deg)}
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MeetIQ — User Flow</h1>
+    <p>From a recorded lecture or meeting to verified, adaptive study material</p>
+  </header>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">1</span><span class="stage-title">Input</span></div>
+    <div class="row">
+      <div class="card"><span class="icon">🎙️</span><h3>Record live</h3><p>Voice/audio captured directly in a classroom or meeting</p></div>
+      <div class="card"><span class="icon">📁</span><h3>Upload a file</h3><p>Video, PDF, image, or a question paper (PYQ)</p></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">2</span><span class="stage-title">Capture &amp; Extract</span></div>
+    <div class="row">
+      <div class="card"><span class="icon">📝</span><h3>Speech-to-text</h3><p>Groq Whisper transcribes with a per-segment confidence score</p></div>
+      <div class="card"><span class="icon">🔎</span><h3>OCR extraction</h3><p>Documents &amp; images read locally, with an extraction-confidence score</p></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">3</span><span class="stage-title">Grounding Engine</span></div>
+    <div class="hero">
+      <h3>Every statement checked against the real source</h3>
+      <p>The core of MeetIQ. No fact ships on trust alone.</p>
+      <div class="rule">✅ <span><b>Cited &amp; supported</b> — kept, confidence carried through</span></div>
+      <div class="rule">🚫 <span><b>Can't be traced to a real segment</b> — dropped before it's ever stored or shown</span></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">4</span><span class="stage-title">Generated Study Material</span></div>
+    <div class="row">
+      <div class="card"><span class="icon">📓</span><h3>Notes</h3><p>Structured, topic-wise notes</p></div>
+      <div class="card"><span class="icon">🗂️</span><h3>Flashcards</h3><p>Active-recall cards, click to flip</p></div>
+      <div class="card"><span class="icon">❓</span><h3>Quiz</h3><p>MCQ, subjective &amp; fill-in-the-blank</p></div>
+      <div class="card"><span class="icon">🧭</span><h3>Flowchart</h3><p>Concept diagrams, grounded in the text</p></div>
+    </div>
+    <div class="badge-row" style="justify-content:center">
+      <span class="badge b-ok">✓ Verified · 94%</span>
+      <span class="badge b-warn">⚠ Low-confidence · 58%</span>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">5</span><span class="stage-title">Faculty Approval Gate</span></div>
+    <div class="row">
+      <div class="card"><span class="icon">👩‍🏫</span><h3>Faculty reviews</h3><p>Sees every item, low-confidence ones flagged for a closer look</p></div>
+      <div class="card"><span class="icon">✅</span><h3>Approve &amp; release</h3><p>Nothing reaches a student until explicitly approved</p></div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <div class="stage">
+    <div class="stage-label"><span class="stage-num">6</span><span class="stage-title">Student Experience</span></div>
+    <div class="row">
+      <div class="card"><span class="icon">📚</span><h3>Study materials</h3><p>Approved notes, flashcards &amp; quizzes only</p></div>
+      <div class="card"><span class="icon">🔍</span><h3>Search across sessions</h3><p>Ask a question, get an answer cited to the exact timestamp</p></div>
+      <div class="card"><span class="icon">📤</span><h3>Export</h3><p>Markdown notes, Anki flashcards, or a PPT for revision</p></div>
+    </div>
+
+    <div class="branch">
+      <div class="branch-title">↳ Adaptive Mastery Loop <span style="color:var(--muted);font-weight:500">— triggered from the Quiz</span></div>
+      <div class="loop-row">
+        <div class="card"><span class="icon">📝</span><h3>Take quiz</h3><p>Score by topic, not just total</p></div>
+        <div class="loop-arrow">→</div>
+        <div class="card"><span class="icon">🎯</span><h3>Weak topics found</h3><p>Wrong answers mapped to topics</p></div>
+        <div class="loop-arrow">→</div>
+        <div class="card"><span class="icon">🖼️</span><h3>New explanation</h3><p>Fresh questions + a simple illustration for that topic</p></div>
+        <div class="loop-arrow">→</div>
+        <div class="card"><span class="icon">🔁</span><h3>Retest</h3><p>Different questions, same topic</p></div>
+      </div>
+      <div class="loop-back">repeats until the topic passes a mastery threshold, then marked ✓ Mastered</div>
+    </div>
+  </div>
+
+  <div class="foundation">
+    <h3>Runs underneath every stage — the institutional layer competitors don't have</h3>
+    <div class="chips">
+      <span class="chip">🔒 Recording consent tracked</span>
+      <span class="chip">🏢 Tenant isolation per institution</span>
+      <span class="chip">📋 Full audit trail</span>
+      <span class="chip">🔑 Role-based access (faculty / student / admin)</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
