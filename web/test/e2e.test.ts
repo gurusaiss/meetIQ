@@ -269,6 +269,75 @@ test("full faculty→student journey over HTTP", async () => {
   assert.match(audit, /asset\.approved/);
 });
 
+test("pasted text becomes an input; flowchart, slides and pptx work after approval; pickers render", async () => {
+  const login = await fetch(`${BASE}/api/login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "name=Anika&role=faculty",
+    redirect: "manual",
+  });
+  const faculty = cookieFrom(login);
+  const form = (fields: Record<string, string>) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+    return fd;
+  };
+
+  const create = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { cookie: faculty },
+    body: form({
+      lectureId: "text-lec",
+      kind: "text",
+      captureSource: "text",
+      noticeShown: "on",
+      text: "Hash tables map keys to values. A good hash function spreads keys evenly. Collisions are resolved by chaining or open addressing.",
+    }),
+    redirect: "manual",
+  });
+  assert.equal(create.status, 303);
+  assert.ok(existsSync(join(dataDir, "media", "text-lec.txt")), "text saved");
+
+  // empty text in text mode is rejected, not silently replaced by the sample transcript
+  const empty = await fetch(`${BASE}/lectures`, {
+    method: "POST",
+    headers: { cookie: faculty },
+    body: form({ lectureId: "text-empty", kind: "text", captureSource: "text", noticeShown: "on", text: "  " }),
+    redirect: "manual",
+  });
+  assert.equal(empty.status, 400);
+
+  const post = (path: string) =>
+    fetch(`${BASE}${path}`, { method: "POST", headers: { cookie: faculty }, redirect: "manual" });
+  assert.equal((await post("/lectures/text-lec/process")).status, 303);
+
+  // before approval: slides + pptx are gated
+  const gated = await (await fetch(`${BASE}/lectures/text-lec/flowchart`, { headers: { cookie: faculty } })).text();
+  assert.match(gated, /Nothing to draw yet/);
+  assert.equal((await fetch(`${BASE}/lectures/text-lec/export/slides.pptx`, { headers: { cookie: faculty } })).status, 404);
+
+  assert.equal((await post("/assets/text-lec:notes:0/approve")).status, 303);
+
+  const flow = await (await fetch(`${BASE}/lectures/text-lec/flowchart`, { headers: { cookie: faculty } })).text();
+  assert.match(flow, /flow-node/);
+  const slides = await (await fetch(`${BASE}/lectures/text-lec/slides`, { headers: { cookie: faculty } })).text();
+  assert.match(slides, /Download \.pptx/);
+  const pptx = await fetch(`${BASE}/lectures/text-lec/export/slides.pptx`, { headers: { cookie: faculty } });
+  assert.equal(pptx.status, 200);
+  assert.match(pptx.headers.get("content-type") ?? "", /presentationml/);
+  const bytes = new Uint8Array(await pptx.arrayBuffer());
+  assert.equal(String.fromCharCode(bytes[0]!, bytes[1]!), "PK", ".pptx is a zip container");
+
+  for (const path of ["/", "/new", "/new?mode=text", "/pick?feature=flowchart", "/pick?feature=slides"]) {
+    const r = await fetch(`${BASE}${path}`, { headers: { cookie: faculty } });
+    assert.equal(r.status, 200, path);
+  }
+  const home = await (await fetch(`${BASE}/`, { headers: { cookie: faculty } })).text();
+  assert.match(home, /Record/);
+  assert.match(home, /Flowchart/);
+  assert.match(home, /PPT slides/);
+});
+
 test("publish redirects to review with a notice query string", async () => {
   const login = await fetch(`${BASE}/api/login`, {
     method: "POST",

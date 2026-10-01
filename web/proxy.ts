@@ -22,6 +22,7 @@ export function proxy(request: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
+    "media-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -37,7 +38,7 @@ export function proxy(request: NextRequest) {
   response.headers.set("x-content-type-options", "nosniff");
   response.headers.set("x-frame-options", "DENY");
   response.headers.set("referrer-policy", "no-referrer");
-  response.headers.set("permissions-policy", "geolocation=(), microphone=(), camera=()");
+  response.headers.set("permissions-policy", "geolocation=(), microphone=(self), camera=()");
   response.headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   return response;
 }

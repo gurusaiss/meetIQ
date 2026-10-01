@@ -1,11 +1,22 @@
 import { redirect } from "next/navigation";
 import { getIdentity, hasRole } from "../lib/auth.ts";
 import { getRepo, COURSE_ID, COURSE_TITLE } from "../lib/singletons.ts";
+import { INPUT_TILES, TOOL_TILES, type Tile as TileData } from "../lib/features.ts";
+import { Tile } from "../components/Tile.tsx";
 import { DeleteLectureForm } from "../components/DeleteLectureForm.tsx";
 import { ProcessForm } from "../components/ProcessButton.tsx";
 import { LectureStatusBadge } from "../components/Badge.tsx";
 
-export default async function DashboardPage() {
+const AUDIT_TILE: TileData = {
+  key: "audit",
+  icon: "🛡️",
+  title: "Audit trail",
+  desc: "Every approval, export and deletion, plus data retention.",
+  from: "#64748b",
+  to: "#334155",
+};
+
+export default async function HomePage() {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
 
@@ -13,31 +24,52 @@ export default async function DashboardPage() {
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);
   const processed = lectures.filter((l) => l.status === "processed").length;
   const waiting = lectures.filter((l) => l.status === "created").length;
+  const visible = canManage ? lectures : lectures.filter((l) => l.status === "processed");
 
   return (
     <>
       <span className="eyebrow">{COURSE_TITLE}</span>
-      <h1>Hi {identity.name.split(" ")[0]}, here are your sessions</h1>
+      <h1>Your workspace</h1>
       <p className="sub">
-        Turn any recorded meeting, lecture, or gathering into a searchable, verified knowledge base.
+        Bring in a recording or text, then pick what to make from it. Every line is cited and
+        verified.
       </p>
 
       <div className="stats">
-        <div className="stat"><b>{lectures.length}</b><span>Sessions</span></div>
+        <div className="stat"><b>{lectures.length}</b><span>Inputs</span></div>
         <div className="stat"><b>{processed}</b><span>Processed &amp; verified</span></div>
         <div className="stat"><b>{waiting}</b><span>Waiting to process</span></div>
       </div>
 
-      <div className="section-title">Sessions</div>
-      {lectures.length === 0 && (
+      {canManage && (
+        <>
+          <div className="section-title">1 · Add an input</div>
+          <div className="tiles">
+            {INPUT_TILES.map((t) => (
+              <Tile key={t.key} tile={t} href={`/new?mode=${t.key}`} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="section-title">{canManage ? "2 · Make something from it" : "What do you want to do?"}</div>
+      <div className="tiles">
+        {TOOL_TILES.map((t) => (
+          <Tile key={t.key} tile={t} href={t.key === "search" ? "/search" : `/pick?feature=${t.key}`} />
+        ))}
+        {identity.role === "admin" && <Tile tile={AUDIT_TILE} href="/audit" />}
+      </div>
+
+      <div className="section-title">Your inputs</div>
+      {visible.length === 0 && (
         <div className="empty">
           <div className="big">🎙️</div>
-          <strong>No sessions yet</strong>
-          <div>{canManage ? "Upload your first recording below." : "Your instructor hasn't added a session yet."}</div>
+          <strong>No inputs yet</strong>
+          <div>{canManage ? "Record, upload or paste something above to get started." : "Your instructor hasn't added anything yet."}</div>
         </div>
       )}
 
-      {lectures.map((l) => (
+      {visible.map((l) => (
         <div className="card" key={l.id}>
           <div className="session">
             <div>
@@ -87,65 +119,17 @@ export default async function DashboardPage() {
       ))}
 
       {canManage && (
-        <>
-          <div className="section-title">Add a recording</div>
-          <div className="card">
-            <h2>🎙️ New session</h2>
-            <p className="kpi" style={{ margin: "4px 0 0" }}>
-              Upload audio or video. It will be transcribed, turned into notes, flashcards and a quiz,
-              and every line verified.
-            </p>
-            <form action="/lectures" method="post" encType="multipart/form-data">
-              <label htmlFor="new-media">Recording (audio or video, max 25 MB)</label>
-              <input id="new-media" type="file" name="media" accept="audio/*,video/*" />
-              <div className="kpi" style={{ marginTop: 6 }}>
-                Optional. Without a file, the built-in sample transcript is used.
-              </div>
-              <div className="fields">
-                <div>
-                  <label htmlFor="new-lecture-id">Session id</label>
-                  <input
-                    id="new-lecture-id"
-                    name="lectureId"
-                    placeholder="lec-2"
-                    required
-                    pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}[a-zA-Z0-9]?"
-                    maxLength={64}
-                    title="1-64 characters: letters, digits, dot, dash, underscore"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="new-capture-source">Capture source</label>
-                  <select id="new-capture-source" name="captureSource" defaultValue="upload">
-                    <option value="upload">Direct upload</option>
-                    <option value="room-capture">Room capture kit</option>
-                    <option value="echo360-import">Echo360 import</option>
-                    <option value="panopto-import">Panopto import</option>
-                  </select>
-                </div>
-              </div>
-              <label className="check" style={{ marginTop: 16 }}>
-                <input type="checkbox" name="noticeShown" defaultChecked />
-                <span>Recording-consent notice was shown to the room (required in all-party-consent regions)</span>
-              </label>
-              <div style={{ marginTop: 18 }}>
-                <button className="btn">Create session →</button>
-              </div>
+        <div className="card">
+          <div className="row">
+            <div>
+              <strong>Import from capture system</strong>
+              <div className="kpi">Pull existing recordings from Echo360/Panopto. Demo uses a mock source.</div>
+            </div>
+            <form action="/import" method="post">
+              <button className="btn small ghost">Import from Echo360 (demo)</button>
             </form>
           </div>
-
-          <div className="card">
-            <div className="row">
-              <div>
-                <strong>Import from capture system</strong>
-                <div className="kpi">Pull existing recordings from Echo360/Panopto. Demo uses a mock source.</div>
-              </div>
-              <form action="/import" method="post">
-                <button className="btn small ghost">Import from Echo360 (demo)</button>
-              </form>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </>
   );

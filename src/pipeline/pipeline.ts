@@ -1,6 +1,10 @@
 import type { PipelineResult } from "../types.ts";
 import { config } from "../config.ts";
 import { getTranscriptionProvider } from "../providers/transcription/index.ts";
+import {
+  TextTranscriptionProvider,
+  TEXT_REF_PREFIX,
+} from "../providers/transcription/text.ts";
 import { getLLMProvider } from "../providers/llm/index.ts";
 import { getEmbeddingsProvider } from "../providers/embeddings/index.ts";
 import { segmentTopics } from "./segment.ts";
@@ -26,7 +30,10 @@ export interface ProcessLectureInput {
 export async function processLecture(
   input: ProcessLectureInput,
 ): Promise<PipelineResult> {
-  const transcription = getTranscriptionProvider();
+  // Typed/pasted/uploaded text skips speech-to-text entirely.
+  const transcription = input.mediaRef.startsWith(TEXT_REF_PREFIX)
+    ? new TextTranscriptionProvider()
+    : getTranscriptionProvider();
   const llm = getLLMProvider();
   const embeddings = getEmbeddingsProvider();
 

@@ -4,7 +4,14 @@ import { getService, INSTITUTION_ID, COURSE_ID } from "../../lib/singletons.ts";
 import { isValidLectureId } from "../../../src/web/lecture-id.ts";
 import { ConflictError } from "../../../src/services/lecture-service.ts";
 import { htmlError, escapeHtml } from "../../lib/http.ts";
-import { mediaPathFor, saveMedia } from "../../lib/media.ts";
+import {
+  mediaPathFor,
+  saveMedia,
+  saveText,
+  textRefFor,
+  isTextFile,
+  MAX_TEXT_CHARS,
+} from "../../lib/media.ts";
 
 // Groq Whisper rejects files over 25 MB; fail early with a clear message.
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -35,14 +42,40 @@ export async function POST(req: NextRequest) {
 
   const upload = form.get("media");
   const file = upload instanceof File && upload.size > 0 ? upload : null;
-  if (file && file.size > MAX_MEDIA_BYTES) {
+  const pasted = String(form.get("text") ?? "").trim();
+
+  // Input kinds: pasted text, an uploaded text file, or an audio/video file.
+  let text: string | null = pasted || null;
+  let media: File | null = null;
+  if (file && isTextFile(file)) {
+    if (file.size > MAX_TEXT_CHARS * 4) {
+      return htmlError(413, `<h1>Text file too large</h1><p><a href="/new">← Back</a></p>`);
+    }
+    text = text ?? (await file.text()).trim();
+  } else if (file) {
+    media = file;
+  }
+  if (String(form.get("kind") ?? "") === "text" && text === null) {
+    return htmlError(400, `<h1>No text provided</h1><p>Paste some text or choose a text file.</p><p><a href="/new?mode=text">← Back</a></p>`);
+  }
+  if (text !== null && text.length > MAX_TEXT_CHARS) {
     return htmlError(
       413,
-      `<h1>Recording too large</h1><div class="notice">Uploads are limited to 25 MB (about 25 minutes of compressed audio).</div><p><a href="/">← Dashboard</a></p>`,
+      `<h1>Text too long</h1><div class="notice">Limit is ${MAX_TEXT_CHARS.toLocaleString()} characters.</div><p><a href="/new">← Back</a></p>`,
     );
   }
-  // Real upload -> real path on disk; no file -> placeholder so the mock path still works.
-  const mediaRef = file ? mediaPathFor(lectureId, file) : `media://${lectureId}`;
+  if (media && media.size > MAX_MEDIA_BYTES) {
+    return htmlError(
+      413,
+      `<h1>Recording too large</h1><div class="notice">Uploads are limited to 25 MB (about 25 minutes of compressed audio).</div><p><a href="/new">← Back</a></p>`,
+    );
+  }
+  // text -> text:// ref (saved after create); media -> real path; nothing -> placeholder (mock path).
+  const mediaRef = media
+    ? mediaPathFor(lectureId, media)
+    : text !== null
+      ? textRefFor(lectureId)
+      : `media://${lectureId}`;
 
   try {
     await getService().createLecture({
@@ -62,8 +95,9 @@ export async function POST(req: NextRequest) {
     }
     throw e;
   }
-  // Written after createLecture so a duplicate id (409) never overwrites an existing recording.
-  if (file) await saveMedia(mediaRef, file);
+  // Written after createLecture so a duplicate id (409) never overwrites an existing input.
+  if (media) await saveMedia(mediaRef, media);
+  else if (text !== null) await saveText(mediaRef, text);
 
   return NextResponse.redirect(new URL("/", req.url), { status: 303 });
 }

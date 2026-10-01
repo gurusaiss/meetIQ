@@ -37,3 +37,21 @@ export async function saveMedia(path: string, file: File): Promise<void> {
   await mkdir(mediaDir(), { recursive: true });
   await writeFile(path, Buffer.from(await file.arrayBuffer()));
 }
+
+export const MAX_TEXT_CHARS = 200_000;
+const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "vtt", "srt", "text"]);
+
+/** True when an uploaded file is a plain-text document rather than audio/video. */
+export function isTextFile(file: File): boolean {
+  return file.type.startsWith("text/") || TEXT_EXTENSIONS.has(mediaExtension(file));
+}
+
+/** Deterministic `text://` mediaRef for a lecture's text input. */
+export function textRefFor(lectureId: string): string {
+  return `text://${mediaDir()}${lectureId}.txt`;
+}
+
+export async function saveText(ref: string, text: string): Promise<void> {
+  await mkdir(mediaDir(), { recursive: true });
+  await writeFile(ref.slice("text://".length), text, "utf8");
+}

@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           </a>
           {identity && (
             <nav>
-              <a className="navlink" href="/">Sessions</a>
+              <a className="navlink" href="/">Workspace</a>
               <a className="navlink" href="/search">Search</a>
               {identity.role === "admin" && <a className="navlink" href="/audit">Audit</a>}
               <span className="user">

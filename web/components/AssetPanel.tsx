@@ -45,7 +45,7 @@ export function AssetPanel({
   }
 
   return (
-    <section>
+    <section id={asset.type} style={{ scrollMarginTop: 80 }}>
       <div className="asset-head">
         <h2>
           <span className="asset-icon">{META[asset.type].icon}</span>

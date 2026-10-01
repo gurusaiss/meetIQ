@@ -8,6 +8,8 @@ import {
 } from "../../../../../../src/export/exporters.ts";
 import type { RevisionNotes, Quiz, Flashcard } from "../../../../../../src/types.ts";
 import { htmlError } from "../../../../../lib/http.ts";
+import { slidesFromNotes } from "../../../../../lib/slides.ts";
+import { buildPptx } from "../../../../../lib/pptx.ts";
 
 export async function GET(
   req: NextRequest,
@@ -45,6 +47,19 @@ export async function GET(
     const a = approved.find((x) => x.type === "quiz");
     if (!a) return htmlError(404, "<h1>Quiz not released yet</h1>");
     return download(quizToMarkdown(lectureId, a.content as Quiz), "text/markdown", `${lectureId}-quiz.md`);
+  }
+  if (file === "slides.pptx") {
+    const a = approved.find((x) => x.type === "notes");
+    if (!a) return htmlError(404, "<h1>Notes not released yet</h1>");
+    const slides = slidesFromNotes(a.content as RevisionNotes);
+    const buf = await buildPptx(lectureId, slides);
+    return new NextResponse(new Uint8Array(buf), {
+      status: 200,
+      headers: {
+        "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "content-disposition": `attachment; filename="${lectureId}-slides.pptx"`,
+      },
+    });
   }
   return htmlError(404, "<h1>404</h1>");
 }
