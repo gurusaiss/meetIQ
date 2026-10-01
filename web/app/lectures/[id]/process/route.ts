@@ -30,7 +30,16 @@ export async function POST(
         `<h1>Cannot process</h1><div class="notice">${escapeHtml(e.message)}</div><p><a href="/">← Dashboard</a></p>`,
       );
     }
-    throw e;
+    // Provider/transcription failures (bad key, unreadable audio, rate limit): show a
+    // readable page instead of Next's bare 500, and log the full error server-side.
+    console.error("lecture.process.failed", lectureId, e);
+    const detail = e instanceof Error ? e.message.slice(0, 300) : "Unknown error";
+    return htmlError(
+      502,
+      `<h1>Processing failed</h1><div class="notice">${escapeHtml(detail)}</div>` +
+        `<p>Check the provider settings and the audio file, then delete this session and create it again.</p>` +
+        `<p><a href="/">← Dashboard</a></p>`,
+    );
   }
 
   return NextResponse.redirect(new URL(`/lectures/${encodeURIComponent(lectureId)}/review`, req.url), {
