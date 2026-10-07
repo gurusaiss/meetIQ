@@ -57,7 +57,14 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      # The shared ../src code imports pg / @anthropic-ai/sdk /
+      # @huggingface/transformers; Node and tsc resolve those from the repo
+      # root, so the root install must exist too (web/Dockerfile does the same).
+      - run: npm ci
+        working-directory: .
       - run: npm ci
       - run: npm run typecheck
       # Runs `next build` itself, then boots `next start` against a
