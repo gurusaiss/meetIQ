@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getRepo, getService, getLms, INSTITUTION_ID, EXTERNAL_COURSE } from "../../../../lib/singletons.ts";
+import { getRepo, getService, getLms, EXTERNAL_COURSE } from "../../../../lib/singletons.ts";
 import { forbidResponse, htmlError } from "../../../../lib/http.ts";
 
 export async function POST(
@@ -12,10 +12,10 @@ export async function POST(
   const { id: lectureId } = await params;
   const lms = getLms();
 
-  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(identity!.institutionId, lectureId);
   if (!lecture) return htmlError(404, "<h1>Lecture not found</h1>");
 
-  const count = await getService().publishToLms(INSTITUTION_ID, lectureId, lms, EXTERNAL_COURSE, identity!);
+  const count = await getService().publishToLms(identity!.institutionId, lectureId, lms, EXTERNAL_COURSE, identity!);
 
   // Redirect back to the review page with a query-string notice — the page
   // reads it and renders the same "Published N asset(s)" message the

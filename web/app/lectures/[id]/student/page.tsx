@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { getIdentity } from "../../../../lib/auth.ts";
-import { getRepo, getService, INSTITUTION_ID } from "../../../../lib/singletons.ts";
+import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
 export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -8,10 +8,10 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   if (!identity) redirect("/login");
 
   const { id: lectureId } = await params;
-  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const assets = await getService().studentAssets(INSTITUTION_ID, lectureId);
+  const assets = await getService().studentAssets(identity.institutionId, lectureId);
   const base = `/lectures/${encodeURIComponent(lectureId)}/export`;
   const exportHref: Record<string, string> = {
     notes: `${base}/notes.md`,

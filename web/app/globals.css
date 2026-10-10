@@ -241,3 +241,27 @@ textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(-
 .slide ul{color:#2b3246}
 .slide-title{font-size:15px;font-weight:800;letter-spacing:-.01em}
 .slide-n{position:absolute;right:12px;bottom:8px;font-size:11px;color:#8a93a8;font-weight:700}
+
+/* ── sectors, signup, invite, strength ─── */
+@media (prefers-color-scheme: light){body[style*="--sector"]{--brand:var(--sector);--brand-soft:color-mix(in srgb,var(--sector) 10%,transparent)}}
+.sectors{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:12px 0}
+.sector{display:flex;flex-direction:column;gap:4px;padding:18px;background:var(--panel);border:1.5px solid var(--line);
+  border-top:4px solid var(--accent,var(--brand));border-radius:var(--radius);box-shadow:var(--shadow);color:var(--ink);
+  transition:transform .15s,border-color .15s}
+.sector:hover{transform:translateY(-3px);border-color:var(--accent,var(--brand));text-decoration:none}
+.sector:focus-visible{outline:2px solid var(--accent,var(--brand));outline-offset:2px}
+.sector-icon{font-size:28px}
+.roles3{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+button.role{font:inherit;text-align:left;color:var(--ink);font-weight:600}
+button.role.on{border-color:var(--brand);background:var(--brand-soft)}
+.pw{display:flex;gap:8px;align-items:center}
+.pw input{flex:1}
+.strength{display:flex;gap:4px;margin:8px 0 4px}
+.strength i{flex:1;height:5px;border-radius:999px;background:var(--chip)}
+.strength i.on.l1{background:var(--danger)}
+.strength i.on.l2{background:var(--warn)}
+.strength i.on.l3,.strength i.on.l4{background:var(--ok)}
+.invite{display:flex;gap:10px;align-items:center}
+.invite-code{font:800 18px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.1em;padding:6px 14px;border-radius:10px;
+  background:var(--brand-soft);color:var(--brand);user-select:all}
+@media(max-width:600px){.stats{grid-template-columns:1fr}.login{grid-template-columns:1fr}.hero h1{font-size:34px}}

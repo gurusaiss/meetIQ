@@ -335,7 +335,7 @@ test("pasted text becomes an input; flowchart, slides and pptx work after approv
   const home = await (await fetch(`${BASE}/`, { headers: { cookie: faculty } })).text();
   assert.match(home, /Record/);
   assert.match(home, /Flowchart/);
-  assert.match(home, /PPT slides/);
+  assert.match(home, /Class slides/);
 });
 
 test("publish redirects to review with a notice query string", async () => {

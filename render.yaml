@@ -19,6 +19,12 @@ services:
         value: local
       - key: GROQ_API_KEY
         sync: false
+      # Render puts the app behind a proxy; trust its X-Forwarded-For for rate limiting.
+      - key: TRUST_PROXY
+        value: "1"
+      # Shared "quick demo" sign-in (no password). Set to 0 once real people use this deployment.
+      - key: DEMO_LOGIN
+        value: "1"
     # disk:
     #   name: meetiq-data
     #   mountPath: /data

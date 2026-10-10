@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/*.test.ts"
+    "test": "node --experimental-strip-types --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { redirect, notFound } from "next/navigation";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getRepo, getService, INSTITUTION_ID } from "../../../../lib/singletons.ts";
+import { getRepo, getService } from "../../../../lib/singletons.ts";
 import type { RevisionNotes } from "../../../../../src/types.ts";
 
 function mmss(sec: number): string {
@@ -12,10 +12,10 @@ export default async function FlowchartPage({ params }: { params: Promise<{ id: 
   const identity = await getIdentity();
   if (!identity) redirect("/login");
   const { id: lectureId } = await params;
-  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const approved = await getService().studentAssets(INSTITUTION_ID, lectureId);
+  const approved = await getService().studentAssets(identity.institutionId, lectureId);
   const notes = approved.find((a) => a.type === "notes")?.content as RevisionNotes | undefined;
   const topics = (notes?.topics ?? []).filter((t) => t.points.length > 0);
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);

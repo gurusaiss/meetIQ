@@ -1,6 +1,7 @@
 import "./globals.css";
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 import { getIdentity } from "../lib/auth.ts";
+import { getSector, getSectorRole } from "../../src/auth/sectors.ts";
 
 export const metadata = {
   title: "MeetIQ — verified notes from every recording",
@@ -10,9 +11,10 @@ export const metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const identity = await getIdentity();
+  const accent = getSector(identity?.sector)?.accent;
   return (
     <html lang="en">
-      <body>
+      <body style={accent ? ({ ["--sector" as string]: accent } as CSSProperties) : undefined}>
         <a href="#main" className="skip-link">
           Skip to content
         </a>
@@ -25,10 +27,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <nav>
               <a className="navlink" href="/">Workspace</a>
               <a className="navlink" href="/search">Search</a>
-              {identity.role === "admin" && <a className="navlink" href="/audit">Audit</a>}
-              <span className="user">
+              {(identity.role === "faculty" || identity.role === "ta" || identity.role === "admin") && (
+                <a className="navlink" href="/approvals">Approvals</a>
+              )}
+              {(identity.role === "admin" || identity.role === "auditor") && (
+                <a className="navlink" href="/audit">Audit</a>
+              )}
+              <span className="user" title={identity.orgName}>
                 <span className="avatar">{identity.name.slice(0, 1).toUpperCase()}</span>
-                {identity.name} <span className="role-tag">{identity.role}</span>
+                {identity.name}{" "}
+                <span className="role-tag">{getSectorRole(identity.sector, identity.profile)?.name ?? identity.role}</span>
               </span>
               <form action="/api/logout" method="post" style={{ display: "inline" }}>
                 <button className="btn small ghost">Sign out</button>

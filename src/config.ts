@@ -62,6 +62,12 @@ export const config = {
      * NODE_ENV=production (e.g. behind a TLS-terminating proxy in staging).
      */
     secureCookies: bool("COOKIE_SECURE", process.env.NODE_ENV === "production"),
+    /**
+     * The one-click "Quick demo" sign-in (pick a role, no password) into a
+     * shared sample organisation. On by default so a fresh deploy can be shown
+     * immediately; set DEMO_LOGIN=0 for a deployment that holds real data.
+     */
+    demoLogin: bool("DEMO_LOGIN", true),
   },
 } as const;
 

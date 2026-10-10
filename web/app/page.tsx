@@ -1,51 +1,79 @@
 import { redirect } from "next/navigation";
-import { getIdentity, hasRole } from "../lib/auth.ts";
-import { getRepo, COURSE_ID, COURSE_TITLE } from "../lib/singletons.ts";
-import { INPUT_TILES, TOOL_TILES, type Tile as TileData } from "../lib/features.ts";
+import { getIdentity } from "../lib/auth.ts";
+import { getRepo, getAccounts } from "../lib/singletons.ts";
+import { tilesFor, noun, toolHref } from "../lib/features.ts";
+import { getSectorRole, getSector } from "../../src/auth/sectors.ts";
+import { formatJoinCode } from "../../src/auth/accounts.ts";
 import { Tile } from "../components/Tile.tsx";
+import { CopyCode } from "../components/CopyCode.tsx";
 import { DeleteLectureForm } from "../components/DeleteLectureForm.tsx";
 import { ProcessForm } from "../components/ProcessButton.tsx";
 import { LectureStatusBadge } from "../components/Badge.tsx";
 
-const AUDIT_TILE: TileData = {
-  key: "audit",
-  icon: "🛡️",
-  title: "Audit trail",
-  desc: "Every approval, export and deletion, plus data retention.",
-  from: "#64748b",
-  to: "#334155",
-};
+const ADMIN_HREF: Record<string, string> = { approvals: "/approvals", audit: "/audit", team: "/team" };
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ welcome?: string }>;
+}) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
+  const { welcome } = await searchParams;
 
-  const lectures = await getRepo().listLecturesByCourse(identity.institutionId, COURSE_ID);
-  const canManage = hasRole(identity, ["faculty", "ta", "admin"]);
+  const lectures = await getRepo().listLecturesByCourse(identity.institutionId, identity.courseId!);
+  const { inputs, tools, admin, access } = tilesFor(identity);
+  const canManage = access.canManage;
   const processed = lectures.filter((l) => l.status === "processed").length;
   const waiting = lectures.filter((l) => l.status === "created").length;
   const visible = canManage ? lectures : lectures.filter((l) => l.status === "processed");
+  const one = noun(identity);
+  const many = noun(identity, true);
+  const title = getSectorRole(identity.sector, identity.profile)?.name ?? identity.role;
+  const sector = getSector(identity.sector);
+  const inviteCode = await getAccounts().inviteCodeFor(identity);
 
   return (
     <>
-      <span className="eyebrow">{COURSE_TITLE}</span>
-      <h1>Your workspace</h1>
+      {welcome && (
+        <div className="notice ok" role="status">
+          🎉 Welcome, {identity.name.split(" ")[0]}! Your {title.toLowerCase()} account is ready.
+          {inviteCode ? " Share the invite code below with your team." : ""}
+        </div>
+      )}
+      <span className="eyebrow">
+        {sector?.icon} {identity.orgName} · {title}
+      </span>
+      <h1>Hi {identity.name.split(" ")[0]}</h1>
       <p className="sub">
-        Bring in a recording or text, then pick what to make from it. Every line is cited and
-        verified.
+        {canManage
+          ? `Bring in a ${one} recording or text, then pick what to make from it. Every line is cited and verified.`
+          : `Study the verified material your team has approved, or search across every ${one}.`}
       </p>
 
       <div className="stats">
-        <div className="stat"><b>{lectures.length}</b><span>Inputs</span></div>
+        <div className="stat"><b>{lectures.length}</b><span>{many[0].toUpperCase() + many.slice(1)}</span></div>
         <div className="stat"><b>{processed}</b><span>Processed &amp; verified</span></div>
         <div className="stat"><b>{waiting}</b><span>Waiting to process</span></div>
       </div>
 
-      {canManage && (
+      {inviteCode && (
+        <div className="card">
+          <div className="row">
+            <div>
+              <strong>Invite your team</strong>
+              <div className="kpi">Colleagues choose their field, pick &ldquo;Join&rdquo; and enter this code.</div>
+            </div>
+            <CopyCode code={formatJoinCode(inviteCode)} />
+          </div>
+        </div>
+      )}
+
+      {inputs.length > 0 && (
         <>
           <div className="section-title">1 · Add an input</div>
           <div className="tiles">
-            {INPUT_TILES.map((t) => (
+            {inputs.map((t) => (
               <Tile key={t.key} tile={t} href={`/new?mode=${t.key}`} />
             ))}
           </div>
@@ -54,18 +82,28 @@ export default async function HomePage() {
 
       <div className="section-title">{canManage ? "2 · Make something from it" : "What do you want to do?"}</div>
       <div className="tiles">
-        {TOOL_TILES.map((t) => (
+        {tools.map((t) => (
           <Tile key={t.key} tile={t} href={t.key === "search" ? "/search" : `/pick?feature=${t.key}`} />
         ))}
-        {identity.role === "admin" && <Tile tile={AUDIT_TILE} href="/audit" />}
       </div>
 
-      <div className="section-title">Your inputs</div>
+      {admin.length > 0 && (
+        <>
+          <div className="section-title">Oversight</div>
+          <div className="tiles">
+            {admin.map((t) => (
+              <Tile key={t.key} tile={t} href={ADMIN_HREF[t.key] ?? "/"} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="section-title">Your {many}</div>
       {visible.length === 0 && (
         <div className="empty">
           <div className="big">🎙️</div>
-          <strong>No inputs yet</strong>
-          <div>{canManage ? "Record, upload or paste something above to get started." : "Your instructor hasn't added anything yet."}</div>
+          <strong>Nothing here yet</strong>
+          <div>{canManage ? "Record, upload or paste something above to get started." : "Nothing has been approved and shared yet."}</div>
         </div>
       )}
 
@@ -87,16 +125,14 @@ export default async function HomePage() {
                 </>
               ) : l.status === "failed" || l.status === "processing" ? (
                 // Reprocessing in place isn't allowed (see the comment on
-                // LectureService.processLecture) — a lecture stuck here
-                // (a genuine failure, or a server crash mid-run) can only be
-                // recovered by delete + recreate, so don't offer a
-                // review/student link into a lecture with no valid content.
+                // LectureService.processLecture): a lecture stuck here can only be
+                // recovered by delete + recreate, so don't link into one with no valid content.
                 <>
                   <span className="kpi">
                     {l.status === "failed"
                       ? "Processing failed."
-                      : "Still processing — if this persists, the run likely crashed."}{" "}
-                    {canManage ? "Delete and create it again to retry." : "Ask faculty to retry."}
+                      : "Still processing. If this persists, the run likely crashed."}{" "}
+                    {canManage ? "Delete and create it again to retry." : "Ask your administrator to retry."}
                   </span>
                   {canManage && <DeleteLectureForm id={l.id} />}
                 </>
@@ -104,11 +140,11 @@ export default async function HomePage() {
                 <>
                   {canManage && (
                     <a className="btn small" href={`/lectures/${encodeURIComponent(l.id)}/review`}>
-                      Faculty review
+                      Review
                     </a>
                   )}
-                  <a className="btn small ghost" href={`/lectures/${encodeURIComponent(l.id)}/student`}>
-                    Student view
+                  <a className="btn small ghost" href={toolHref("notes", l.id, false)}>
+                    {canManage ? "Student view" : "Open"}
                   </a>
                   {canManage && <DeleteLectureForm id={l.id} />}
                 </>
@@ -118,7 +154,7 @@ export default async function HomePage() {
         </div>
       ))}
 
-      {canManage && (
+      {canManage && identity.sector === "uni" && !identity.owner && identity.id.startsWith("demo-") && (
         <div className="card">
           <div className="row">
             <div>

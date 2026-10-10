@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getIdentity } from "../../lib/auth.ts";
-import { getService, COURSE_ID } from "../../lib/singletons.ts";
+import { getService } from "../../lib/singletons.ts";
 
 function mmss(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -18,7 +18,7 @@ export default async function SearchPage({
 
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const hits = query ? await getService().searchCourse(identity.institutionId, COURSE_ID, query, 3) : [];
+  const hits = query ? await getService().searchCourse(identity.institutionId, identity.courseId!, query, 3) : [];
 
   return (
     <>

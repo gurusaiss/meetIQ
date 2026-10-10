@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity } from "../../../../lib/auth.ts";
-import { getService, INSTITUTION_ID } from "../../../../lib/singletons.ts";
+import { getService } from "../../../../lib/singletons.ts";
 import { AuthorizationError } from "../../../../../src/services/lecture-service.ts";
 import { forbidResponse } from "../../../../lib/http.ts";
 
@@ -14,7 +14,7 @@ export async function POST(
   const service = getService();
 
   try {
-    const approved = await service.approveAsset(INSTITUTION_ID, assetId, identity);
+    const approved = await service.approveAsset(identity!.institutionId, assetId, identity);
     return NextResponse.redirect(
       new URL(`/lectures/${encodeURIComponent(approved.lectureId)}/review`, req.url),
       { status: 303 },

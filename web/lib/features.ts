@@ -1,3 +1,6 @@
+import type { Identity, Role } from "../../src/auth/session.ts";
+import { getSector, type WordKey } from "../../src/auth/sectors.ts";
+
 export interface Tile {
   key: string;
   icon: string;
@@ -25,6 +28,62 @@ export const TOOL_TILES: Tile[] = [
   { key: "slides", icon: "📊", title: "PPT slides", desc: "Download a PowerPoint deck of the verified notes.", from: "#f97316", to: "#ec4899" },
   { key: "search", icon: "🔎", title: "Search", desc: "Ask questions across every input, with timestamps.", from: "#8b5cf6", to: "#ec4899" },
 ];
+
+/** Tiles that aren't an input or a tool: oversight and administration. */
+export const APPROVALS_TILE: Tile = {
+  key: "approvals", icon: "✅", title: "Approvals",
+  desc: "Review generated material. Nothing is released until you approve it.",
+  from: "#10b981", to: "#0ea5e9",
+};
+export const AUDIT_TILE: Tile = {
+  key: "audit", icon: "🛡️", title: "Audit trail",
+  desc: "Every approval, export and deletion, plus data retention.",
+  from: "#64748b", to: "#334155",
+};
+export const TEAM_TILE: Tile = {
+  key: "team", icon: "👥", title: "Team & invite code",
+  desc: "Who has joined, and the code for adding your colleagues.",
+  from: "#8b5cf6", to: "#6366f1",
+};
+
+/** Apply the signed-in organisation's wording ("class", "meeting", "hearing"...). */
+export function reword(tile: Tile, sectorId?: string): Tile {
+  const w = getSector(sectorId)?.words[tile.key as WordKey];
+  return w ? { ...tile, title: w[0], desc: w[1] } : tile;
+}
+
+/** What each permission role can do. Routes enforce these too; this only decides what to show. */
+export function accessFor(role: Role) {
+  return {
+    /** add inputs, process, approve, delete, export */
+    canManage: role === "faculty" || role === "ta" || role === "admin",
+    canAudit: role === "admin" || role === "auditor",
+    canRunRetention: role === "admin",
+  };
+}
+
+/** The tiles a person sees, grouped for the home screen. */
+export function tilesFor(identity: Identity) {
+  const access = accessFor(identity.role);
+  const sector = identity.sector;
+  const tools = TOOL_TILES.map((t) => reword(t, sector));
+  const admin: Tile[] = [];
+  if (access.canManage) admin.push(APPROVALS_TILE);
+  if (access.canAudit) admin.push(AUDIT_TILE);
+  if (identity.owner || identity.role === "admin") admin.push(TEAM_TILE);
+  return {
+    inputs: access.canManage ? INPUT_TILES.map((t) => reword(t, sector)) : [],
+    tools,
+    admin,
+    access,
+  };
+}
+
+/** "class" / "classes" etc. for this person's organisation. */
+export function noun(identity: Identity, plural = false): string {
+  const n = getSector(identity.sector)?.noun ?? { one: "session", many: "sessions" };
+  return plural ? n.many : n.one;
+}
 
 export function toolHref(tool: string, lectureId: string, canManage: boolean): string {
   const id = encodeURIComponent(lectureId);

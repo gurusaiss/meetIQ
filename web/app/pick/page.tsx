@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
-import { getRepo, COURSE_ID } from "../../lib/singletons.ts";
+import { getRepo } from "../../lib/singletons.ts";
 import { TOOL_TILES, INPUT_TILES, toolHref } from "../../lib/features.ts";
 import { Tile } from "../../components/Tile.tsx";
 import { ProcessForm } from "../../components/ProcessButton.tsx";
@@ -19,7 +19,7 @@ export default async function PickPage({
   if (tool.key === "search") redirect("/search");
 
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);
-  const lectures = await getRepo().listLecturesByCourse(identity.institutionId, COURSE_ID);
+  const lectures = await getRepo().listLecturesByCourse(identity.institutionId, identity.courseId!);
   const usable = canManage ? lectures : lectures.filter((l) => l.status === "processed");
 
   return (

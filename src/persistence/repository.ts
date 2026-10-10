@@ -71,7 +71,38 @@ export interface AuditEvent {
   ts: string;
 }
 
+/** A sign-in account. `baseRole` is the permission role; `profile` is the sector-specific title. */
+export interface UserRecord {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  institutionId: string;
+  sector: string;
+  profile: string;
+  baseRole: "student" | "faculty" | "ta" | "admin" | "auditor";
+  createdAt: string;
+}
+
+/** Sector, invite code and default course for one organisation (tenant). */
+export interface OrgProfile {
+  institutionId: string;
+  sector: string;
+  courseId: string;
+  joinCode: string;
+  ownerUserId: string;
+  createdAt: string;
+}
+
 export interface Repository {
+  // accounts & organisations
+  createUser(u: UserRecord): Promise<void>;
+  getUserByEmail(email: string): Promise<UserRecord | null>;
+  listUsers(institutionId: string): Promise<UserRecord[]>;
+  createOrgProfile(o: OrgProfile): Promise<void>;
+  getOrgProfile(institutionId: string): Promise<OrgProfile | null>;
+  getOrgByJoinCode(joinCode: string): Promise<OrgProfile | null>;
+
   // tenants & structure
   upsertInstitution(i: Institution): Promise<void>;
   getInstitution(id: string): Promise<Institution | null>;

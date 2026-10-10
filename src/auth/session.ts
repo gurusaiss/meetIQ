@@ -14,13 +14,22 @@
  */
 import { randomBytes } from "node:crypto";
 
-export type Role = "student" | "faculty" | "ta" | "admin";
+/** `auditor` is read-only: audit trail + approved material + search, nothing that mutates. */
+export type Role = "student" | "faculty" | "ta" | "admin" | "auditor";
 
 export interface Identity {
   id: string;
   name: string;
   role: Role;
   institutionId: string;
+  /** Sector / sector-role / org display fields (UI only; permissions come from `role`). */
+  sector?: string;
+  profile?: string;
+  orgName?: string;
+  /** The organisation's default course (the workspace its sessions live in). */
+  courseId?: string;
+  /** True for the account that created the organisation (sees the invite code). */
+  owner?: boolean;
 }
 
 export interface Session {

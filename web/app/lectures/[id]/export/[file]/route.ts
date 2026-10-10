@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity } from "../../../../../lib/auth.ts";
-import { getService, INSTITUTION_ID } from "../../../../../lib/singletons.ts";
+import { getService } from "../../../../../lib/singletons.ts";
 import {
   notesToMarkdown,
   flashcardsToAnkiCsv,
@@ -18,7 +18,7 @@ export async function GET(
   const identity = await getIdentity();
   if (!identity) return NextResponse.redirect(new URL("/login", req.url), { status: 303 });
   const { id: lectureId, file } = await params;
-  const approved = await getService().studentAssets(INSTITUTION_ID, lectureId);
+  const approved = await getService().studentAssets(identity!.institutionId, lectureId);
 
   const download = (body: string, type: string, name: string) =>
     new NextResponse(body, {

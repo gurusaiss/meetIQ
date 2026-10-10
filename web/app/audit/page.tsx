@@ -1,15 +1,16 @@
 import { redirect, forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
-import { getRepo, INSTITUTION_ID } from "../../lib/singletons.ts";
+import { getRepo } from "../../lib/singletons.ts";
 
 export default async function AuditPage() {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
-  if (!hasRole(identity, ["admin"])) forbidden();
+  if (!hasRole(identity, ["admin", "auditor"])) forbidden();
+  const canRetain = identity.role === "admin";
   const repo = getRepo();
 
-  const events = await repo.listAudit(INSTITUTION_ID);
-  const inst = await repo.getInstitution(INSTITUTION_ID);
+  const events = await repo.listAudit(identity.institutionId);
+  const inst = await repo.getInstitution(identity.institutionId);
 
   return (
     <>
@@ -24,9 +25,13 @@ export default async function AuditPage() {
               Tenant policy: delete sessions older than {inst?.retentionDays ?? 0} days.
             </div>
           </div>
-          <form action="/admin/retention" method="post">
-            <button className="btn small">Run retention now</button>
-          </form>
+          {canRetain ? (
+            <form action="/admin/retention" method="post">
+              <button className="btn small">Run retention now</button>
+            </form>
+          ) : (
+            <span className="chip">Read-only access</span>
+          )}
         </div>
       </div>
       <div className="card">

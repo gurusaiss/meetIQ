@@ -1,59 +1,49 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { getSessions, getLoginLimiter, INSTITUTION_ID } from "../../../lib/singletons.ts";
-import { COOKIE_NAME, type Identity, type Role } from "../../../lib/auth.ts";
+import type { NextRequest } from "next/server";
+import { DEMO_INSTITUTION_ID, DEMO_COURSE_ID, DEMO_ORG_NAME } from "../../../lib/singletons.ts";
+import type { Identity, Role } from "../../../lib/auth.ts";
+import { tooManyAttempts, startSession, redirectTo, field } from "../../../lib/session.ts";
 import { config } from "../../../../src/config.ts";
 
-const ROLES: Role[] = ["student", "faculty", "ta", "admin"];
-
 /**
- * `X-Forwarded-For` is set by the CLIENT unless a trusted reverse proxy
- * overwrites it — trusting it unconditionally would let anyone bypass the
- * rate limiter below by sending a different value on every request. Only
- * read it when the operator has confirmed a trusted proxy is in front
- * (TRUST_PROXY=1); otherwise fall back to a single shared key, which still
- * caps total login attempts even though it can't distinguish clients.
+ * "Quick demo" sign-in: pick a role, no password, into a shared sample
+ * organisation (State University). Real accounts use /api/signin and
+ * /api/signup. Turn this off with DEMO_LOGIN=0 for a deployment holding real data.
  */
-function clientKey(req: NextRequest): string {
-  if (!config.security.trustProxy) return "unproxied";
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-}
-
-/** A non-redirect error response — NextResponse.redirect only accepts 3xx statuses. */
-function errorPage(status: number, message: string): NextResponse {
-  return new NextResponse(
-    `<!doctype html><html><body><h1>Sign in</h1><div class="notice">${message}</div>` +
-      `<p><a href="/login">Back to sign in</a></p></body></html>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8" } },
-  );
-}
+const DEMO_ROLES: Role[] = ["student", "faculty", "ta", "admin", "auditor"];
+// Display title inside the sample university, per permission role.
+const DEMO_PROFILE: Record<Role, string> = {
+  faculty: "faculty",
+  ta: "faculty",
+  student: "student",
+  admin: "admin",
+  auditor: "faculty",
+};
 
 export async function POST(req: NextRequest) {
-  if (!getLoginLimiter().check(clientKey(req))) {
-    return errorPage(429, "Too many attempts. Please wait a minute and try again.");
+  if (!config.security.demoLogin) {
+    return redirectTo(req, "/login", { error: "Quick demo sign-in is turned off. Please sign in with your account." });
+  }
+  if (tooManyAttempts(req)) {
+    return redirectTo(req, "/login", { error: "Too many attempts. Please wait a minute and try again." });
   }
 
   const form = await req.formData();
-  const name = String(form.get("name") ?? "").trim();
-  const role = String(form.get("role") ?? "") as Role;
-
-  if (!name || name.length > 100 || !ROLES.includes(role)) {
-    return errorPage(400, "Enter a name (under 100 characters) and valid role.");
+  const name = field(form, "name", 101);
+  const role = field(form, "role", 20) as Role;
+  if (!name || name.length > 100 || !DEMO_ROLES.includes(role)) {
+    return redirectTo(req, "/login", { error: "Enter a name (under 100 characters) and a valid role." });
   }
 
   const identity: Identity = {
-    id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    id: `demo-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
     name,
     role,
-    institutionId: INSTITUTION_ID,
+    institutionId: DEMO_INSTITUTION_ID,
+    sector: "uni",
+    profile: DEMO_PROFILE[role],
+    orgName: DEMO_ORG_NAME,
+    courseId: DEMO_COURSE_ID,
+    owner: false,
   };
-  const session = getSessions().create(identity);
-
-  const res = NextResponse.redirect(new URL("/", req.url), { status: 303 });
-  res.cookies.set(COOKIE_NAME, session.token, {
-    httpOnly: true,
-    path: "/",
-    sameSite: "lax",
-    secure: config.security.secureCookies,
-  });
-  return res;
+  return startSession(req, identity);
 }

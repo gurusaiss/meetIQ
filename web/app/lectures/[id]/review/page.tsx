@@ -1,6 +1,6 @@
 import { redirect, notFound, forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getRepo, getService, INSTITUTION_ID } from "../../../../lib/singletons.ts";
+import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
 export default async function ReviewPage({
@@ -16,10 +16,10 @@ export default async function ReviewPage({
 
   const { id: lectureId } = await params;
   const { published, total } = await searchParams;
-  const lecture = await getRepo().getLecture(INSTITUTION_ID, lectureId);
+  const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const assets = await getService().reviewQueue(INSTITUTION_ID, lectureId);
+  const assets = await getService().reviewQueue(identity.institutionId, lectureId);
   const approvedCount = assets.filter((a) => a.status === "approved").length;
 
   return (

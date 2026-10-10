@@ -28,6 +28,8 @@ import type {
   ConsentRecord,
   StoredAsset,
   AuditEvent,
+  UserRecord,
+  OrgProfile,
 } from "./repository.ts";
 
 const SCHEMA = `
@@ -61,6 +63,15 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE TABLE IF NOT EXISTS audit (
   institution_id TEXT, actor TEXT, action TEXT, target TEXT, ts TEXT
 );
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, password_hash TEXT,
+  institution_id TEXT, sector TEXT, profile TEXT, base_role TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS org_profiles (
+  institution_id TEXT PRIMARY KEY, sector TEXT, course_id TEXT,
+  join_code TEXT UNIQUE, owner_user_id TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(institution_id);
 CREATE INDEX IF NOT EXISTS idx_lectures_tenant ON lectures(institution_id);
 CREATE INDEX IF NOT EXISTS idx_assets_lecture ON assets(institution_id, lecture_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_course ON chunks(institution_id, course_id);
@@ -73,6 +84,52 @@ export class SqliteRepository implements Repository {
   constructor(path = ":memory:") {
     this.db = new DatabaseSync(path);
     this.db.exec(SCHEMA);
+  }
+
+  async createUser(u: UserRecord): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO users (id,email,name,password_hash,institution_id,sector,profile,base_role,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(u.id, u.email, u.name, u.passwordHash, u.institutionId, u.sector, u.profile, u.baseRole, u.createdAt);
+  }
+
+  async getUserByEmail(email: string): Promise<UserRecord | null> {
+    const r = this.db.prepare(`SELECT * FROM users WHERE email=?`).get(email) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? rowToUser(r) : null;
+  }
+
+  async listUsers(institutionId: string): Promise<UserRecord[]> {
+    const rows = this.db
+      .prepare(`SELECT * FROM users WHERE institution_id=? ORDER BY created_at`)
+      .all(institutionId) as Record<string, unknown>[];
+    return rows.map(rowToUser);
+  }
+
+  async createOrgProfile(o: OrgProfile): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO org_profiles (institution_id,sector,course_id,join_code,owner_user_id,created_at)
+         VALUES (?,?,?,?,?,?)`,
+      )
+      .run(o.institutionId, o.sector, o.courseId, o.joinCode, o.ownerUserId, o.createdAt);
+  }
+
+  async getOrgProfile(institutionId: string): Promise<OrgProfile | null> {
+    const r = this.db.prepare(`SELECT * FROM org_profiles WHERE institution_id=?`).get(institutionId) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? rowToOrg(r) : null;
+  }
+
+  async getOrgByJoinCode(joinCode: string): Promise<OrgProfile | null> {
+    const r = this.db.prepare(`SELECT * FROM org_profiles WHERE join_code=?`).get(joinCode) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? rowToOrg(r) : null;
   }
 
   async upsertInstitution(i: Institution): Promise<void> {
@@ -341,6 +398,31 @@ export class SqliteRepository implements Repository {
   async close(): Promise<void> {
     this.db.close();
   }
+}
+
+function rowToUser(r: Record<string, unknown>): UserRecord {
+  return {
+    id: r.id as string,
+    email: r.email as string,
+    name: r.name as string,
+    passwordHash: r.password_hash as string,
+    institutionId: r.institution_id as string,
+    sector: r.sector as string,
+    profile: r.profile as string,
+    baseRole: r.base_role as UserRecord["baseRole"],
+    createdAt: r.created_at as string,
+  };
+}
+
+function rowToOrg(r: Record<string, unknown>): OrgProfile {
+  return {
+    institutionId: r.institution_id as string,
+    sector: r.sector as string,
+    courseId: r.course_id as string,
+    joinCode: r.join_code as string,
+    ownerUserId: r.owner_user_id as string,
+    createdAt: r.created_at as string,
+  };
 }
 
 function rowToLecture(r: Record<string, unknown>): Lecture {

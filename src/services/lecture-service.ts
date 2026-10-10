@@ -30,7 +30,7 @@ import {
 } from "../export/exporters.ts";
 import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
 
-export type Role = "student" | "faculty" | "ta" | "admin";
+export type Role = "student" | "faculty" | "ta" | "admin" | "auditor";
 export interface Actor {
   id: string;
   role: Role;

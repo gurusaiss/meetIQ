@@ -230,3 +230,33 @@ maybeTest("LectureService against PostgresRepository: full lifecycle parity", as
     await repo.close();
   }
 });
+
+maybeTest("PostgresRepository stores users and organisation profiles (accounts)", async () => {
+  const repo = new PostgresRepository(DATABASE_URL!, VECTOR_DIM);
+  try {
+    const tag = Date.now().toString(36);
+    const email = `pg-${tag}@x.test`;
+    const now = new Date().toISOString();
+    await repo.createUser({
+      id: `u-${tag}`, email, name: "Pg User", passwordHash: "scrypt$x", institutionId: `org-${tag}`,
+      sector: "uni", profile: "admin", baseRole: "admin", createdAt: now,
+    });
+    assert.equal((await repo.getUserByEmail(email))?.name, "Pg User");
+    assert.equal(await repo.getUserByEmail("missing@x.test"), null);
+    await assert.rejects(() =>
+      repo.createUser({
+        id: `u2-${tag}`, email, name: "Dup", passwordHash: "x", institutionId: `org-${tag}`,
+        sector: "uni", profile: "admin", baseRole: "admin", createdAt: now,
+      }),
+    );
+    await repo.createOrgProfile({
+      institutionId: `org-${tag}`, sector: "uni", courseId: `c-org-${tag}`, joinCode: `CODE${tag}`.toUpperCase(),
+      ownerUserId: `u-${tag}`, createdAt: now,
+    });
+    assert.equal((await repo.getOrgProfile(`org-${tag}`))?.courseId, `c-org-${tag}`);
+    assert.equal((await repo.getOrgByJoinCode(`CODE${tag}`.toUpperCase()))?.institutionId, `org-${tag}`);
+    assert.equal((await repo.listUsers(`org-${tag}`)).length, 1);
+  } finally {
+    await repo.close();
+  }
+});

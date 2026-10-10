@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getService, INSTITUTION_ID } from "../../../../lib/singletons.ts";
+import { getService } from "../../../../lib/singletons.ts";
 import { ComplianceError, ConflictError } from "../../../../../src/services/lecture-service.ts";
 import { forbidResponse, htmlError, escapeHtml } from "../../../../lib/http.ts";
 
@@ -13,7 +13,7 @@ export async function POST(
   const { id: lectureId } = await params;
 
   try {
-    await getService().processLecture(INSTITUTION_ID, lectureId, {
+    await getService().processLecture(identity!.institutionId, lectureId, {
       diarize: true,
       speakerHints: { SPEAKER_0: "Prof. Anika", SPEAKER_1: "Student" },
     });

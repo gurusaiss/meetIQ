@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
-import { getService, INSTITUTION_ID, COURSE_ID } from "../../lib/singletons.ts";
+import { getService } from "../../lib/singletons.ts";
 import { isValidLectureId } from "../../../src/web/lecture-id.ts";
 import { ConflictError } from "../../../src/services/lecture-service.ts";
 import { htmlError, escapeHtml } from "../../lib/http.ts";
@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
 
   try {
     await getService().createLecture({
-      institutionId: INSTITUTION_ID,
-      courseId: COURSE_ID,
+      institutionId: identity!.institutionId,
+      courseId: identity!.courseId!,
       lectureId,
       mediaRef,
       captureSource: String(form.get("captureSource") ?? "upload"),

@@ -32,18 +32,22 @@ import { logger } from "../../src/observability/logger.ts";
 import { createRepository, type Repository } from "../../src/persistence/index.ts";
 import { LectureService } from "../../src/services/lecture-service.ts";
 import { SessionStore, RateLimiter } from "../../src/auth/session.ts";
+import { AccountService } from "../../src/auth/accounts.ts";
 import { MockLmsConnector } from "../../src/integrations/lms.ts";
 
-export const INSTITUTION_ID = "inst-a";
-export const COURSE_ID = "cs101";
-export const COURSE_TITLE = "CS101 · Data Structures";
+/** The shared sample organisation behind the "Quick demo" sign-in. */
+export const DEMO_INSTITUTION_ID = "inst-a";
+export const DEMO_COURSE_ID = "cs101";
+export const DEMO_ORG_NAME = "State University";
 export const EXTERNAL_COURSE = "CS101-2026S";
 
 interface Globals {
   __lipRepo?: Repository;
   __lipService?: LectureService;
+  __lipAccounts?: AccountService;
   __lipSessions?: SessionStore;
   __lipLoginLimiter?: RateLimiter;
+  __lipEmailLimiter?: RateLimiter;
   __lipLms?: MockLmsConnector;
   __lipSeedPromise?: Promise<void>;
 }
@@ -71,21 +75,25 @@ function build(): void {
   });
   logger.info("repository.selected", { driver: config.repository.driver });
   g.__lipService = new LectureService(g.__lipRepo);
+  g.__lipAccounts = new AccountService(g.__lipRepo);
   g.__lipSessions = new SessionStore();
-  g.__lipLoginLimiter = new RateLimiter(10, 60_000);
+  // Per client: generous (a school/office can share one address). Per account
+  // (getEmailLimiter): tight, which is what actually stops password guessing.
+  g.__lipLoginLimiter = new RateLimiter(60, 60_000);
+  g.__lipEmailLimiter = new RateLimiter(10, 60_000);
   g.__lipLms = new MockLmsConnector();
 }
 
 async function seed(): Promise<void> {
   await g.__lipService!.seedInstitution(
     {
-      id: INSTITUTION_ID,
-      name: "State University",
+      id: DEMO_INSTITUTION_ID,
+      name: DEMO_ORG_NAME,
       consentPolicy: "all_party",
       dataRegion: "us-east",
       retentionDays: 365,
     },
-    { id: COURSE_ID, institutionId: INSTITUTION_ID, code: "CS101", title: COURSE_TITLE },
+    { id: DEMO_COURSE_ID, institutionId: DEMO_INSTITUTION_ID, code: "CS101", title: `${DEMO_ORG_NAME} · Workspace` },
   );
 }
 
@@ -114,11 +122,17 @@ export function getRepo(): Repository {
 export function getService(): LectureService {
   return g.__lipService!;
 }
+export function getAccounts(): AccountService {
+  return g.__lipAccounts!;
+}
 export function getSessions(): SessionStore {
   return g.__lipSessions!;
 }
 export function getLoginLimiter(): RateLimiter {
   return g.__lipLoginLimiter!;
+}
+export function getEmailLimiter(): RateLimiter {
+  return g.__lipEmailLimiter!;
 }
 export function getLms(): MockLmsConnector {
   return g.__lipLms!;
