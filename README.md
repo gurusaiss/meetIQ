@@ -173,6 +173,12 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
 - **Two interchangeable persistence adapters** — SQLite (zero-dep, this
   deploy) and Postgres+pgvector (real vector columns, tested against a live
   instance) — behind one `Repository` port.
+- **Accounts, fields and roles** (Next.js app): sign up by field (university,
+  organisation, law, medical, training, government), create or join an
+  organisation with an invite code, scrypt-hashed passwords, per-field role
+  titles mapped onto five permission roles (student, faculty, ta, admin,
+  read-only auditor). See [`DEMO.md`](DEMO.md). The zero-dependency server
+  keeps its simple demo login.
 - **Production hardening**: structured logging, health probes, session
   expiry + login rate limiting, strict CSP, secure cookies, graceful
   shutdown, and a handful of real bugs found by actually exercising the app
