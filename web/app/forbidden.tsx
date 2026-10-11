@@ -1,10 +1,12 @@
 export default function Forbidden() {
   return (
-    <>
-      <h1>403 — not permitted for your role</h1>
+    <div className="empty" style={{ marginTop: 40 }}>
+      <span className="eyebrow">403</span>
+      <strong>That page isn&apos;t part of your role</strong>
+      <div>Your account can&apos;t open this. If you think it should, ask your organisation&apos;s administrator.</div>
       <p>
-        <a href="/">← Dashboard</a>
+        <a className="btn small" href="/">Back to your workspace</a>
       </p>
-    </>
+    </div>
   );
 }
