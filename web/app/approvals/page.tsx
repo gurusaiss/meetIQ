@@ -34,7 +34,6 @@ export default async function ApprovalsPage() {
 
       {rows.length === 0 && (
         <div className="empty">
-          <div className="big">✅</div>
           <strong>Nothing to review</strong>
           <div>Process a {noun(identity)} first and its generated material will show up here.</div>
         </div>

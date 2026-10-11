@@ -31,7 +31,6 @@ export default async function FlowchartPage({ params }: { params: Promise<{ id: 
 
       {topics.length === 0 ? (
         <div className="empty">
-          <div className="big">🔒</div>
           <strong>Nothing to draw yet</strong>
           <div>
             The notes for this input haven&apos;t been approved.{" "}

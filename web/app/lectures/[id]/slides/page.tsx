@@ -27,7 +27,6 @@ export default async function SlidesPage({ params }: { params: Promise<{ id: str
 
       {slides.length === 0 ? (
         <div className="empty">
-          <div className="big">🔒</div>
           <strong>No slides yet</strong>
           <div>
             The notes for this input haven&apos;t been approved.{" "}

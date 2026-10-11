@@ -26,7 +26,7 @@ export default async function SignupSectorPage({
     <div style={{ ["--accent" as string]: sector.accent }}>
       <span className="eyebrow">Step 2 of 2 · {sector.name}</span>
       <h1>
-        {sector.icon} Create your account
+        Create your account
       </h1>
       <p className="sub">{sector.blurb}</p>
       <div className="card" style={{ padding: 26 }}>

@@ -5,10 +5,10 @@ import { RecordPanel } from "./RecordPanel.tsx";
 type Mode = "record" | "upload" | "text" | "file";
 
 const MODES: { key: Mode; label: string; source: string }[] = [
-  { key: "record", label: "🎙️ Record", source: "recording" },
-  { key: "upload", label: "📁 Upload recording", source: "upload" },
-  { key: "text", label: "✍️ Paste text", source: "text" },
-  { key: "file", label: "📄 Text file", source: "text-file" },
+  { key: "record", label: "Record", source: "recording" },
+  { key: "upload", label: "Upload recording", source: "upload" },
+  { key: "text", label: "Paste text", source: "text" },
+  { key: "file", label: "Text file", source: "text-file" },
 ];
 
 export function NewInputForm({ initialMode, defaultId }: { initialMode: Mode; defaultId: string }) {

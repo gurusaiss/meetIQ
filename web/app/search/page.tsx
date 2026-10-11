@@ -44,9 +44,9 @@ export default async function SearchPage({
       </form>
       <div style={{ marginTop: 16 }}>
         {!query ? (
-          <div className="empty"><div className="big">💬</div>Ask a question about anything covered in your sessions.<br />Every answer links back to the exact moment it was said.</div>
+          <div className="empty">Ask a question about anything covered in your sessions.<br />Every answer links back to the exact moment it was said.</div>
         ) : hits.length === 0 ? (
-          <div className="empty"><div className="big">🔎</div>No matches. Try different words.</div>
+          <div className="empty">No matches. Try different words.</div>
         ) : (
           hits.map((h, i) => (
             <div className="card hit" key={i}>

@@ -22,9 +22,9 @@ export default async function SignupPage({
       </p>
       {error && <div className="notice" role="alert">{error}</div>}
       <div className="sectors">
-        {SECTORS.map((s) => (
+        {SECTORS.map((s, i) => (
           <a className="sector" href={`/signup/${s.id}`} key={s.id} style={{ ["--accent" as string]: s.accent }}>
-            <span className="sector-icon">{s.icon}</span>
+            <span className="sector-no">{String(i + 1).padStart(2, "0")}</span>
             <b>{s.name}</b>
             <span className="kpi">{s.tag}</span>
             <span className="kpi">{s.roles.map((r) => r.name).join(" · ")}</span>

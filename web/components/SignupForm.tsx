@@ -49,11 +49,11 @@ export function SignupForm({ sectorId, orgLabel, orgPlaceholder, rolesCreate, ro
       <label>What are you doing?</label>
       <div className="roles" role="radiogroup" aria-label="Create or join">
         <button type="button" className={`role pick${mode === "create" ? " on" : ""}`} onClick={() => setMode("create")} aria-pressed={mode === "create"}>
-          ✨ Create an organisation
+          Create an organisation
           <small>You become its administrator and get an invite code for your team.</small>
         </button>
         <button type="button" className={`role pick${mode === "join" ? " on" : ""}`} onClick={() => setMode("join")} aria-pressed={mode === "join"}>
-          🔑 Join with an invite code
+          Join with an invite code
           <small>Your administrator gives you the code.</small>
         </button>
       </div>
@@ -75,7 +75,7 @@ export function SignupForm({ sectorId, orgLabel, orgPlaceholder, rolesCreate, ro
         {roles.map((r) => (
           <label className="role" key={r.id}>
             <input type="radio" name="roleId" value={r.id} defaultChecked={r.id === defaultRole} required />
-            {r.icon} {r.name}
+            {r.name}
             <small>{r.desc}</small>
           </label>
         ))}

@@ -32,7 +32,6 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
 
       {assets.length === 0 ? (
         <div className="empty">
-          <div className="big">🔒</div>
           No materials have been released for this session yet. They're reviewed and approved
           first.
         </div>

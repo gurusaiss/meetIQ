@@ -50,9 +50,9 @@ export function QuizStudy({ quiz }: { quiz: Quiz }) {
           )}
         </div>
       ))}
-      {checked && <div className="score">Score: {score} / {quiz.questions.length} 🎯</div>}
+      {checked && <div className="score">Score: {score} / {quiz.questions.length}</div>}
       <button className="btn" onClick={() => setChecked(true)}>
-        Check answers ✓
+        Check answers
       </button>
     </div>
   );

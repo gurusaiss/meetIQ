@@ -9,9 +9,9 @@ import { QuizReview } from "./QuizView.tsx";
 import { QuizStudy } from "./QuizStudy.tsx";
 
 const META = {
-  notes: { icon: "📝", title: "Revision notes" },
-  flashcards: { icon: "🃏", title: "Flashcards" },
-  quiz: { icon: "❓", title: "Quiz" },
+  notes: { icon: "01", title: "Revision notes" },
+  flashcards: { icon: "02", title: "Flashcards" },
+  quiz: { icon: "03", title: "Quiz" },
 } as const;
 
 function pct(n: number): string {
@@ -54,7 +54,7 @@ export function AssetPanel({
         {mode === "review" &&
           (asset.status !== "approved" ? (
             <form action={`/assets/${encodeURIComponent(asset.id)}/approve`} method="post" style={{ display: "inline" }}>
-              <button className="btn small">✓ Approve &amp; release to students</button>
+              <button className="btn small">Approve &amp; release</button>
             </form>
           ) : (
             <span className="badge b-approved">released to students</span>

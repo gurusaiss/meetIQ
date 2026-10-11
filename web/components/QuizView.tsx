@@ -11,7 +11,7 @@ export function QuizReview({ quiz }: { quiz: Quiz }) {
           <strong><span className="qnum">{i + 1}</span>{q.question}</strong>
           {q.options.map((o, j) => (
             <div className={`opt${j === q.answerIndex ? " correct" : ""}`} key={j}>
-              <span aria-hidden="true">{j === q.answerIndex ? "✅" : "○"}</span>
+              <span aria-hidden="true">{j === q.answerIndex ? "✓" : "○"}</span>
               {o}
               {j === q.answerIndex && <span className="sr-only"> (correct answer)</span>}
             </div>

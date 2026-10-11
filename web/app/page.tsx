@@ -37,12 +37,12 @@ export default async function HomePage({
     <>
       {welcome && (
         <div className="notice ok" role="status">
-          🎉 Welcome, {identity.name.split(" ")[0]}! Your {title.toLowerCase()} account is ready.
+          Welcome, {identity.name.split(" ")[0]}! Your {title.toLowerCase()} account is ready.
           {inviteCode ? " Share the invite code below with your team." : ""}
         </div>
       )}
       <span className="eyebrow">
-        {sector?.icon} {identity.orgName} · {title}
+        {identity.orgName} · {title}
       </span>
       <h1>Hi {identity.name.split(" ")[0]}</h1>
       <p className="sub">
@@ -101,7 +101,6 @@ export default async function HomePage({
       <div className="section-title">Your {many}</div>
       {visible.length === 0 && (
         <div className="empty">
-          <div className="big">🎙️</div>
           <strong>Nothing here yet</strong>
           <div>{canManage ? "Record, upload or paste something above to get started." : "Nothing has been approved and shared yet."}</div>
         </div>

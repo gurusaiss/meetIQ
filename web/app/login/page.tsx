@@ -4,11 +4,11 @@ import { config } from "../../../src/config.ts";
 import { SECTORS } from "../../../src/auth/sectors.ts";
 
 const DEMO_ROLES = [
-  { value: "faculty", icon: "🎓", title: "Faculty", desc: "Record, review, approve" },
-  { value: "ta", icon: "🧑‍🏫", title: "TA", desc: "Review & approve" },
-  { value: "student", icon: "📖", title: "Student", desc: "Study approved material" },
-  { value: "admin", icon: "🛡️", title: "Admin", desc: "Audit & retention" },
-  { value: "auditor", icon: "🔍", title: "Auditor", desc: "Read-only audit trail" },
+  { value: "faculty", title: "Faculty", desc: "Record, review, approve" },
+  { value: "ta", title: "TA", desc: "Review & approve" },
+  { value: "student", title: "Student", desc: "Study approved material" },
+  { value: "admin", title: "Admin", desc: "Audit & retention" },
+  { value: "auditor", title: "Auditor", desc: "Read-only audit trail" },
 ];
 
 export default async function LoginPage({
@@ -24,39 +24,32 @@ export default async function LoginPage({
     <>
       <div className="login">
         <section className="hero">
-          <span className="eyebrow">Verified meeting intelligence</span>
+          <span className="eyebrow">Recordings in, checked notes out</span>
           <h1>
-            Notes you can <span className="grad">actually trust.</span>
+            Every line traced back to <em>what was actually said.</em>
           </h1>
           <p className="sub">
-            Record or paste anything. MeetIQ writes notes, flashcards, a quiz, a flowchart and slides,
-            and every line is checked against the real transcript before you ever see it.
+            Record a meeting or paste some text. MeetIQ drafts notes, flashcards, a quiz, a flowchart and
+            slides, then throws away anything it can&apos;t find in the transcript.
           </p>
-          <div className="feature">
-            <i>🔗</i>
-            <div>
-              <b>Every statement is cited</b>
-              <span className="muted">Linked to the exact moment it was said.</span>
-            </div>
-          </div>
-          <div className="feature">
-            <i>🛡️</i>
-            <div>
-              <b>Unverifiable content is deleted</b>
-              <span className="muted">Not shown with a disclaimer. Gone.</span>
-            </div>
-          </div>
-          <div className="feature">
-            <i>📊</i>
-            <div>
-              <b>Confidence on every item</b>
-              <span className="muted">Mumbled audio is flagged, not hidden.</span>
-            </div>
-          </div>
+          <ol className="proof">
+            <li>
+              <b>Cited</b>
+              <span>Each statement links to the moment in the recording it came from.</span>
+            </li>
+            <li>
+              <b>Deleted, not disclaimed</b>
+              <span>If a claim can&apos;t be matched to the transcript, it never reaches you.</span>
+            </li>
+            <li>
+              <b>Scored</b>
+              <span>Muffled audio is flagged with a confidence figure rather than hidden.</span>
+            </li>
+          </ol>
         </section>
 
         <div className="card" style={{ padding: 26 }}>
-          <h2 style={{ fontSize: 22 }}>Sign in</h2>
+          <h2>Sign in</h2>
           {error && <div className="notice" role="alert">{error}</div>}
           <form action="/api/signin" method="post">
             <label htmlFor="in-email">Email</label>
@@ -68,16 +61,16 @@ export default async function LoginPage({
             </div>
           </form>
           <p className="kpi" style={{ marginTop: 14 }}>
-            New here? <a href="/signup">Create an account</a>: choose your field, then create or join an organisation.
+            New here? <a href="/signup">Create an account</a>. You choose your field, then start an organisation or join one.
           </p>
         </div>
       </div>
 
-      <div className="section-title">Pick your field</div>
+      <div className="section-title">Or start with your field</div>
       <div className="sectors">
-        {SECTORS.map((s) => (
+        {SECTORS.map((s, i) => (
           <a className="sector" href={`/signup/${s.id}`} key={s.id} style={{ ["--accent" as string]: s.accent }}>
-            <span className="sector-icon">{s.icon}</span>
+            <span className="sector-no">{String(i + 1).padStart(2, "0")}</span>
             <b>{s.name}</b>
             <span className="kpi">{s.tag}</span>
           </a>
@@ -86,7 +79,7 @@ export default async function LoginPage({
 
       {config.security.demoLogin && (
         <div className="card" style={{ marginTop: 28 }}>
-          <h3 style={{ margin: 0 }}>Just looking around?</h3>
+          <h3 className="h3">Just looking around?</h3>
           <p className="kpi" style={{ margin: "4px 0 0" }}>
             Quick demo: no password, into a shared sample university. Don&apos;t put real data here.
           </p>
@@ -98,7 +91,7 @@ export default async function LoginPage({
               {DEMO_ROLES.map((r) => (
                 <label className="role" key={r.value}>
                   <input type="radio" name="role" value={r.value} defaultChecked={r.value === "faculty"} />
-                  {r.icon} {r.title}
+                  {r.title}
                   <small>{r.desc}</small>
                 </label>
               ))}

@@ -32,7 +32,6 @@ export default async function PickPage({
 
       {usable.length === 0 ? (
         <div className="empty">
-          <div className="big">📭</div>
           <strong>No inputs yet</strong>
           <div style={{ marginBottom: 16 }}>
             {canManage ? "Add one first, then come back here." : "Ask your instructor to add a session."}
