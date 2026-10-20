@@ -23,6 +23,9 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "media-src 'self' blob:",
+    // strict-dynamic ignores 'self' for scripts, so the service worker needs its own directive.
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

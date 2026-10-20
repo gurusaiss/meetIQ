@@ -180,6 +180,10 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
   read-only auditor), change-your-own-password, and admin-issued one-time
   temporary passwords (no email service needed). See [`DEMO.md`](DEMO.md). The zero-dependency server
   keeps its simple demo login.
+- **Installable PWA** (Next.js app): web manifest, generated icons
+  (`web/scripts/make-icons.mjs`), an "Install app" button, and a service worker
+  that caches only static build assets and an offline page. Pages, API
+  responses and transcripts are never cached, by design.
 - **Production hardening**: structured logging, health probes, session
   expiry + login rate limiting, strict CSP, secure cookies, graceful
   shutdown, and a handful of real bugs found by actually exercising the app
