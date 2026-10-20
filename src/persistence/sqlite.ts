@@ -102,6 +102,10 @@ export class SqliteRepository implements Repository {
     return r ? rowToUser(r) : null;
   }
 
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    this.db.prepare(`UPDATE users SET password_hash=? WHERE id=?`).run(passwordHash, userId);
+  }
+
   async listUsers(institutionId: string): Promise<UserRecord[]> {
     const rows = this.db
       .prepare(`SELECT * FROM users WHERE institution_id=? ORDER BY created_at`)

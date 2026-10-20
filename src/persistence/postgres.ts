@@ -138,6 +138,10 @@ export class PostgresRepository implements Repository {
     return rows[0] ? rowToUser(rows[0]) : null;
   }
 
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.q(`UPDATE users SET password_hash=$1 WHERE id=$2`, [passwordHash, userId]);
+  }
+
   async listUsers(institutionId: string): Promise<UserRecord[]> {
     const rows = await this.q(`SELECT * FROM users WHERE institution_id=$1 ORDER BY created_at`, [
       institutionId,

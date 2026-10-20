@@ -26,7 +26,7 @@ export default async function PickPage({
     <>
       <span className="eyebrow">Step 1 of 2</span>
       <h1>
-        {tool.icon} {tool.title}: choose an input
+        {tool.title}: choose an input
       </h1>
       <p className="sub">Pick the recording, text or transcript you want to use.</p>
 

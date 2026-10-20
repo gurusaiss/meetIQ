@@ -232,7 +232,7 @@ maybeTest("LectureService against PostgresRepository: full lifecycle parity", as
 });
 
 maybeTest("PostgresRepository stores users and organisation profiles (accounts)", async () => {
-  const repo = new PostgresRepository(DATABASE_URL!, VECTOR_DIM);
+  const repo = new PostgresRepository({ connectionString: DATABASE_URL!, vectorDim: VECTOR_DIM });
   try {
     const tag = Date.now().toString(36);
     const email = `pg-${tag}@x.test`;

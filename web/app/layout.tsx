@@ -38,6 +38,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 {identity.name}{" "}
                 <span className="role-tag">{getSectorRole(identity.sector, identity.profile)?.name ?? identity.role}</span>
               </span>
+              <a className="navlink" href="/account">Account</a>
               <form action="/api/logout" method="post" style={{ display: "inline" }}>
                 <button className="btn small ghost">Sign out</button>
               </form>

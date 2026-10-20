@@ -50,6 +50,14 @@ export function formatJoinCode(code: string): string {
   return code.replace(/(.{4})(?=.)/g, "$1-");
 }
 
+/** 12 readable chars, always has a letter and a digit so it passes the password rule. */
+function tempPassword(): string {
+  const bytes = randomBytes(10);
+  let out = "";
+  for (const b of bytes) out += CODE_ALPHABET[b % CODE_ALPHABET.length];
+  return `${out.slice(0, 5)}-${out.slice(5)}-7a`.toLowerCase().replace(/^(.)/, (c) => c.toUpperCase());
+}
+
 function newJoinCode(): string {
   const bytes = randomBytes(8);
   let out = "";
@@ -180,6 +188,33 @@ export class AccountService {
     }
     if (!(await verifyPassword(password, user.passwordHash))) throw new AccountError(401, "Wrong email or password.");
     return this.identityFor(user);
+  }
+
+  /** Change your own password. Needs the current one. */
+  async changePassword(identity: Identity, current: string, next: string): Promise<void> {
+    const user = (await this.repo.listUsers(identity.institutionId)).find((u) => u.id === identity.id);
+    if (!user) throw new AccountError(404, "This account doesn't use a password (quick demo sign-in).");
+    if (!(await verifyPassword(current, user.passwordHash))) throw new AccountError(401, "Your current password is wrong.");
+    const problem = passwordProblem(next);
+    if (problem) throw new AccountError(400, problem);
+    await this.repo.updatePasswordHash(user.id, await hashPassword(next));
+    await this.repo.audit({ institutionId: user.institutionId, actor: user.id, action: "password.changed", target: user.email, ts: new Date().toISOString() });
+  }
+
+  /**
+   * An administrator sets a one-time temporary password for a member of the
+   * same organisation (no email needed). Returned once; the member should
+   * change it after signing in.
+   */
+  async resetMemberPassword(identity: Identity, email: string): Promise<{ name: string; email: string; temporary: string }> {
+    if (identity.role !== "admin") throw new AccountError(403, "Only an administrator can reset a password.");
+    const target = (await this.repo.listUsers(identity.institutionId)).find((u) => u.email === normalizeEmail(email));
+    if (!target) throw new AccountError(404, "No such member in your organisation.");
+    if (target.id === identity.id) throw new AccountError(400, "Use Change password for your own account.");
+    const temporary = tempPassword();
+    await this.repo.updatePasswordHash(target.id, await hashPassword(temporary));
+    await this.repo.audit({ institutionId: identity.institutionId, actor: identity.id, action: "password.reset", target: target.email, ts: new Date().toISOString() });
+    return { name: target.name, email: target.email, temporary };
   }
 
   async identityFor(user: UserRecord): Promise<Identity> {

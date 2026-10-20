@@ -177,7 +177,8 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
   organisation, law, medical, training, government), create or join an
   organisation with an invite code, scrypt-hashed passwords, per-field role
   titles mapped onto five permission roles (student, faculty, ta, admin,
-  read-only auditor). See [`DEMO.md`](DEMO.md). The zero-dependency server
+  read-only auditor), change-your-own-password, and admin-issued one-time
+  temporary passwords (no email service needed). See [`DEMO.md`](DEMO.md). The zero-dependency server
   keeps its simple demo login.
 - **Production hardening**: structured logging, health probes, session
   expiry + login rate limiting, strict CSP, secure cookies, graceful
@@ -187,7 +188,8 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
 
 ## Roadmap
 
-Not built yet, and why: a real async job queue (the pipeline currently runs
+Not built yet, and why: email-based verification and self-service reset
+(needs a mail provider); a real async job queue (the pipeline currently runs
 inline within one HTTP request — fine for Groq's fast inference, but a
 genuine production system would decouple this with a worker + queue so a
 slow provider can't hold a request open); real capture-system/LMS

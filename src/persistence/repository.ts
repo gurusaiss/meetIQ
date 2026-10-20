@@ -99,6 +99,7 @@ export interface Repository {
   createUser(u: UserRecord): Promise<void>;
   getUserByEmail(email: string): Promise<UserRecord | null>;
   listUsers(institutionId: string): Promise<UserRecord[]>;
+  updatePasswordHash(userId: string, passwordHash: string): Promise<void>;
   createOrgProfile(o: OrgProfile): Promise<void>;
   getOrgProfile(institutionId: string): Promise<OrgProfile | null>;
   getOrgByJoinCode(joinCode: string): Promise<OrgProfile | null>;

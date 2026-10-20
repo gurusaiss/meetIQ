@@ -49,7 +49,7 @@ const R = (
 
 export const SECTORS: Sector[] = [
   {
-    id: "uni", name: "University & College", icon: "🎓", accent: "#4f46e5",
+    id: "uni", name: "University & College", icon: "🎓", accent: "#8a2f2f",
     tag: "Classes, labs and exams",
     orgLabel: "University or college name", orgPlaceholder: "State University",
     noun: { one: "class", many: "classes" },
@@ -70,7 +70,7 @@ export const SECTORS: Sector[] = [
     },
   },
   {
-    id: "org", name: "Organization", icon: "🏢", accent: "#0369a1",
+    id: "org", name: "Organization", icon: "🏢", accent: "#1f5c4a",
     tag: "Meetings, teams and training",
     orgLabel: "Company name", orgPlaceholder: "Acme Corp",
     noun: { one: "meeting", many: "meetings" },
@@ -133,7 +133,7 @@ export const SECTORS: Sector[] = [
     },
   },
   {
-    id: "train", name: "Training & Coaching", icon: "⚡", accent: "#c2410c",
+    id: "train", name: "Training & Coaching", icon: "⚡", accent: "#b4540a",
     tag: "Academies, bootcamps and coaches",
     orgLabel: "Academy or practice name", orgPlaceholder: "Bright Academy",
     noun: { one: "session", many: "sessions" },
@@ -154,7 +154,7 @@ export const SECTORS: Sector[] = [
     },
   },
   {
-    id: "gov", name: "Government & Public", icon: "🏛️", accent: "#1d4ed8",
+    id: "gov", name: "Government & Public", icon: "🏛️", accent: "#3b4a6b",
     tag: "Hearings, councils and records",
     orgLabel: "Department or agency", orgPlaceholder: "City Planning Office",
     noun: { one: "hearing", many: "hearings" },

@@ -6,7 +6,8 @@ import { CopyCode } from "../../components/CopyCode.tsx";
 
 export const metadata = { title: "Team · MeetIQ" };
 
-export default async function TeamPage() {
+export default async function TeamPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const identity = await getIdentity();
   if (!identity) redirect("/login");
   if (!identity.owner && !hasRole(identity, ["admin"])) forbidden();
@@ -19,6 +20,8 @@ export default async function TeamPage() {
       <span className="eyebrow">{identity.orgName}</span>
       <h1>Team &amp; invite code</h1>
       <p className="sub">Everyone who has joined this organisation. Joining never grants administrator access.</p>
+
+      {error && <div className="notice" role="alert">{error}</div>}
 
       <div className="card">
         <div className="row">
@@ -47,6 +50,7 @@ export default async function TeamPage() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Joined</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -58,6 +62,14 @@ export default async function TeamPage() {
                     {m.title} <span className="kpi">({m.role})</span>
                   </td>
                   <td>{m.since.slice(0, 10)}</td>
+                  <td>
+                    {(
+                      <form action="/team/reset" method="post">
+                        <input type="hidden" name="email" value={m.email} />
+                        <button className="btn small ghost">Reset password</button>
+                      </form>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

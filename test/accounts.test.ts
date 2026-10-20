@@ -115,3 +115,24 @@ test("organisations are separate tenants with separate courses", async () => {
   assert.equal((await accounts.members(a)).length, 1);
   assert.equal(normalizeJoinCode("ab-cd 12"), "ABCD12");
 });
+
+test("change password needs the current one; admin reset issues a working temporary password", async () => {
+  const { accounts } = make();
+  const owner = await create(accounts);
+  const code = (await accounts.inviteCodeFor(owner))!;
+  const member = await accounts.signUp({ mode: "join", sector: "uni", roleId: "student", name: "Sam", email: "sam@x.test", password: PW, joinCode: code });
+
+  await assert.rejects(accounts.changePassword(member, "wrong-pass-1", "Another-pass-2"), (e: unknown) => e instanceof AccountError && e.status === 401);
+  await assert.rejects(accounts.changePassword(member, PW, "weak"), (e: unknown) => e instanceof AccountError && e.status === 400);
+  await accounts.changePassword(member, PW, "Another-pass-2");
+  await assert.rejects(accounts.signIn("sam@x.test", PW));
+  await accounts.signIn("sam@x.test", "Another-pass-2");
+
+  await assert.rejects(accounts.resetMemberPassword(member, "owner@x.test"), (e: unknown) => e instanceof AccountError && e.status === 403);
+  await assert.rejects(accounts.resetMemberPassword(owner, "owner@x.test"), (e: unknown) => e instanceof AccountError && e.status === 400);
+  await assert.rejects(accounts.resetMemberPassword(owner, "ghost@x.test"), (e: unknown) => e instanceof AccountError && e.status === 404);
+  const r = await accounts.resetMemberPassword(owner, "sam@x.test");
+  assert.equal(passwordProblem(r.temporary), null);
+  await assert.rejects(accounts.signIn("sam@x.test", "Another-pass-2"));
+  await accounts.signIn("sam@x.test", r.temporary);
+});
