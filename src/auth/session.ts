@@ -90,6 +90,18 @@ export class SessionStore {
   destroy(token: string | undefined): void {
     if (token) this.sessions.delete(token);
   }
+
+  /** Ends every session for a user (after a password change or admin reset), optionally keeping one. */
+  revokeUser(userId: string, exceptToken?: string): number {
+    let n = 0;
+    for (const [token, s] of this.sessions) {
+      if (s.identity.id === userId && token !== exceptToken) {
+        this.sessions.delete(token);
+        n++;
+      }
+    }
+    return n;
+  }
 }
 
 /** Minimal cookie header parser (no dependency). */

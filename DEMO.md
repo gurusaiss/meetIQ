@@ -30,6 +30,6 @@
 - **Sign up** (`/signup`): pick a field (University, Organisation, Law & Auditors, Medical, Training, Government), then
   *Create an organisation* (you become its administrator and get an invite code) or *Join* with a code from your administrator.
 - Each field has its own roles and wording ("class", "meeting", "hearing"…). Joining never grants admin access.
-- **Quick demo** on the sign-in page enters a shared sample university with no password. Turn it off with `DEMO_LOGIN=0`.
+- **Quick demo** on the sign-in page enters a shared sample university with no password. It is on in development and OFF by default in production (everyone who uses it shares one organisation, including its admin role). Set `DEMO_LOGIN=1` to enable it on a showcase deploy.
 - Auditors get a **read-only** audit trail. Students/clients only see approved material.
 - No SQL to run: the `users` and `org_profiles` tables are created automatically on first start (SQLite and Postgres).

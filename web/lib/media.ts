@@ -22,6 +22,19 @@ const MIME_EXT: Record<string, string> = {
   "video/webm": "webm",
 };
 
+const MEDIA_EXTENSIONS = new Set(["mp3", "wav", "m4a", "mp4", "webm", "ogg", "oga", "flac", "aac", "mpeg", "mpga", "mov"]);
+
+/** Audio/video only: the extension decides what is written to disk, so don't accept arbitrary ones. */
+export function isAllowedMedia(file: File): boolean {
+  return MEDIA_EXTENSIONS.has(mediaExtension(file)) && (file.type === "" || /^(audio|video)\//.test(file.type));
+}
+
+const CAPTURE_SOURCES = new Set(["recording", "upload", "text", "text-file"]);
+export function safeCaptureSource(v: unknown): string {
+  const s = String(v ?? "");
+  return CAPTURE_SOURCES.has(s) ? s : "upload";
+}
+
 /** Lower-case alphanumeric extension from the filename, else from the MIME type. */
 export function mediaExtension(file: File): string {
   const m = /\.([a-zA-Z0-9]{1,5})$/.exec(file.name);

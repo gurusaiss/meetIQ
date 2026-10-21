@@ -64,10 +64,11 @@ export const config = {
     secureCookies: bool("COOKIE_SECURE", process.env.NODE_ENV === "production"),
     /**
      * The one-click "Quick demo" sign-in (pick a role, no password) into a
-     * shared sample organisation. On by default so a fresh deploy can be shown
-     * immediately; set DEMO_LOGIN=0 for a deployment that holds real data.
+     * shared sample organisation. Everyone who uses it shares one organisation,
+     * including its admin role, so it is OFF by default in production; set
+     * DEMO_LOGIN=1 to enable it for a showcase deploy.
      */
-    demoLogin: bool("DEMO_LOGIN", true),
+    demoLogin: bool("DEMO_LOGIN", process.env.NODE_ENV !== "production"),
   },
 } as const;
 

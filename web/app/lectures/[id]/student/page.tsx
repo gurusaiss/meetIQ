@@ -3,6 +3,8 @@ import { getIdentity } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
+export const metadata = { title: "Notes · MeetIQ" };
+
 export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");

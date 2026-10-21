@@ -3,6 +3,8 @@ import { getIdentity, hasRole } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
+export const metadata = { title: "Review · MeetIQ" };
+
 export default async function ReviewPage({
   params,
   searchParams,
@@ -34,7 +36,7 @@ export default async function ReviewPage({
       {published !== undefined && (
         <div className="notice">
           {Number(published) > 0
-            ? `Published ${published} approved asset(s) to the LMS (mock connector). Total pushed this session: ${total}.`
+            ? `Published ${published} approved asset(s) to the demo LMS connector (nothing leaves this app yet). Total pushed this session: ${total}.`
             : "Nothing to publish — approve at least one asset first."}
         </div>
       )}
@@ -50,8 +52,8 @@ export default async function ReviewPage({
           <div>
             <strong>Publish to LMS</strong>
             <div className="kpi">
-              Pushes {approvedCount} approved asset(s) into Canvas/Moodle. Demo uses a
-              mock connector.
+              Pushes {approvedCount} approved asset(s) to a demo LMS connector. Nothing leaves this
+              app yet; real Canvas/Moodle connectors need your institution&rsquo;s credentials.
             </div>
           </div>
           <form action={`/lectures/${encodeURIComponent(lectureId)}/publish`} method="post">

@@ -3,6 +3,8 @@ import { getIdentity } from "../../../lib/auth.ts";
 import { getSector, selectableRoles } from "../../../../src/auth/sectors.ts";
 import { SignupForm } from "../../../components/SignupForm.tsx";
 
+export const metadata = { title: "Sign up · MeetIQ" };
+
 type Q = { error?: string; mode?: string; name?: string; email?: string; org?: string; role?: string };
 
 export default async function SignupSectorPage({

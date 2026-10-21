@@ -9,6 +9,7 @@ import {
   ComplianceError,
   AuthorizationError,
   ConflictError,
+  NotFoundError,
 } from "../src/services/lecture-service.ts";
 import type { Institution, Course } from "../src/persistence/repository.ts";
 
@@ -186,4 +187,19 @@ test("data persists to disk across repository reopen", async () => {
   } finally {
     rmSync(file, { force: true });
   }
+});
+
+test("a lecture id already used by another organisation is a ConflictError, not a raw DB error", async () => {
+  const { service } = await svc();
+  await service.seedInstitution({ ...INST, id: "inst-b" }, { ...COURSE, id: "course-b", institutionId: "inst-b" });
+  const input = { institutionId: "inst-a", courseId: "course-cs101", lectureId: "shared-id", mediaRef: "media://x", captureSource: "upload", consent: { noticeShown: true } };
+  await service.createLecture(input);
+  await assert.rejects(() => service.createLecture({ ...input, institutionId: "inst-b", courseId: "course-b" }), ConflictError);
+});
+
+test("missing lectures and assets raise NotFoundError", async () => {
+  const { service } = await svc();
+  await assert.rejects(() => service.processLecture("inst-a", "nope"), NotFoundError);
+  await assert.rejects(() => service.deleteLecture("inst-a", "nope", { id: "f", role: "faculty" }), NotFoundError);
+  await assert.rejects(() => service.approveAsset("inst-a", "nope:notes:0", { id: "f", role: "faculty" }), NotFoundError);
 });

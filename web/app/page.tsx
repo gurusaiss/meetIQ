@@ -10,6 +10,8 @@ import { DeleteLectureForm } from "../components/DeleteLectureForm.tsx";
 import { ProcessForm } from "../components/ProcessButton.tsx";
 import { LectureStatusBadge } from "../components/Badge.tsx";
 
+export const metadata = { title: "Workspace · MeetIQ" };
+
 const ADMIN_HREF: Record<string, string> = { approvals: "/approvals", audit: "/audit", team: "/team" };
 
 export default async function HomePage({

@@ -15,7 +15,13 @@ export async function POST(
   const lecture = await getRepo().getLecture(identity!.institutionId, lectureId);
   if (!lecture) return htmlError(404, "<h1>Lecture not found</h1>");
 
-  const count = await getService().publishToLms(identity!.institutionId, lectureId, lms, EXTERNAL_COURSE, identity!);
+  let count: number;
+  try {
+    count = await getService().publishToLms(identity!.institutionId, lectureId, lms, EXTERNAL_COURSE, identity!);
+  } catch (e) {
+    console.error("lecture.publish.failed", lectureId, e);
+    return htmlError(502, `<h1>Publishing failed</h1><div class="notice">The LMS connector did not accept the upload. Nothing was published.</div><p><a href="/lectures/${encodeURIComponent(lectureId)}/review">← Back to review</a></p>`);
+  }
 
   // Redirect back to the review page with a query-string notice — the page
   // reads it and renders the same "Published N asset(s)" message the

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getIdentity } from "../../lib/auth.ts";
 import { getService } from "../../lib/singletons.ts";
 
+export const metadata = { title: "Search · MeetIQ" };
+
 function mmss(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity } from "../../../../lib/auth.ts";
 import { getService } from "../../../../lib/singletons.ts";
-import { AuthorizationError } from "../../../../../src/services/lecture-service.ts";
-import { forbidResponse } from "../../../../lib/http.ts";
+import { AuthorizationError, NotFoundError } from "../../../../../src/services/lecture-service.ts";
+import { forbidResponse, htmlError, isError } from "../../../../lib/http.ts";
 
 export async function POST(
   req: NextRequest,
@@ -20,7 +20,8 @@ export async function POST(
       { status: 303 },
     );
   } catch (e) {
-    if (e instanceof AuthorizationError) return forbidResponse();
+    if (isError(e, "AuthorizationError")) return forbidResponse();
+    if (isError(e, "NotFoundError")) return htmlError(404, "<h1>Item not found</h1>");
     throw e;
   }
 }

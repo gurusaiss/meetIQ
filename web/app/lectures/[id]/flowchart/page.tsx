@@ -4,6 +4,8 @@ import { getIdentity, hasRole } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
 import type { RevisionNotes } from "../../../../../src/types.ts";
 
+export const metadata = { title: "Flowchart · MeetIQ" };
+
 function mmss(sec: number): string {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 }

@@ -36,9 +36,18 @@ export interface Actor {
   role: Role;
 }
 
-export class ComplianceError extends Error {}
-export class AuthorizationError extends Error {}
-export class ConflictError extends Error {}
+export class ComplianceError extends Error {
+  override name = "ComplianceError";
+}
+export class AuthorizationError extends Error {
+  override name = "AuthorizationError";
+}
+export class ConflictError extends Error {
+  override name = "ConflictError";
+}
+export class NotFoundError extends Error {
+  override name = "NotFoundError";
+}
 
 export interface CreateLectureInput {
   institutionId: string;
@@ -82,7 +91,17 @@ export class LectureService {
       captureSource: input.captureSource,
       createdAt: new Date().toISOString(),
     };
-    await this.repo.createLecture(lecture);
+    try {
+      await this.repo.createLecture(lecture);
+    } catch (e) {
+      // Lecture ids are unique across the whole database, so another organisation may already hold this one.
+      // Say nothing about who has it.
+      const msg = e instanceof Error ? e.message : "";
+      if (/unique|duplicate key|23505/i.test(msg)) {
+        throw new ConflictError(`Lecture id ${input.lectureId} is already in use. Choose a different id.`);
+      }
+      throw e;
+    }
 
     const consent: ConsentRecord = {
       lectureId: input.lectureId,
@@ -103,7 +122,7 @@ export class LectureService {
     opts: { diarize?: boolean; speakerHints?: Record<string, string> } = {},
   ): Promise<StoredAsset[]> {
     const lecture = await this.repo.getLecture(institutionId, lectureId);
-    if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
+    if (!lecture) throw new NotFoundError(`Lecture ${lectureId} not found`);
 
     // Asset/chunk ids are deterministic per lecture (`${lectureId}:${type}:${i}`,
     // `${lectureId}:chunk:${topicId}`) and the underlying inserts are plain
@@ -167,7 +186,7 @@ export class LectureService {
       );
     }
     const asset = await this.repo.getAsset(institutionId, assetId);
-    if (!asset) throw new Error(`Asset ${assetId} not found`);
+    if (!asset) throw new NotFoundError(`Asset ${assetId} not found`);
     await this.repo.setAssetStatus(institutionId, assetId, "approved");
     await this.audit(institutionId, actor.id, "asset.approved", assetId);
     return { ...asset, status: "approved" };
@@ -205,7 +224,7 @@ export class LectureService {
       throw new AuthorizationError(`Role ${actor.role} cannot delete lectures.`);
     }
     if (!(await this.repo.getLecture(institutionId, lectureId))) {
-      throw new Error(`Lecture ${lectureId} not found`);
+      throw new NotFoundError(`Lecture ${lectureId} not found`);
     }
     await this.repo.deleteLecture(institutionId, lectureId);
     await this.audit(institutionId, actor.id, "lecture.deleted", lectureId);

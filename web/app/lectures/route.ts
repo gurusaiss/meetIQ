@@ -3,13 +3,15 @@ import { getIdentity, hasRole } from "../../lib/auth.ts";
 import { getService } from "../../lib/singletons.ts";
 import { isValidLectureId } from "../../../src/web/lecture-id.ts";
 import { ConflictError } from "../../../src/services/lecture-service.ts";
-import { htmlError, escapeHtml } from "../../lib/http.ts";
+import { htmlError, escapeHtml, isError } from "../../lib/http.ts";
 import {
   mediaPathFor,
   saveMedia,
   saveText,
   textRefFor,
   isTextFile,
+  isAllowedMedia,
+  safeCaptureSource,
   MAX_TEXT_CHARS,
 } from "../../lib/media.ts";
 
@@ -53,6 +55,9 @@ export async function POST(req: NextRequest) {
     }
     text = text ?? (await file.text()).trim();
   } else if (file) {
+    if (!isAllowedMedia(file)) {
+      return htmlError(415, `<h1>Unsupported file</h1><div class="notice">Upload an audio or video recording (mp3, wav, m4a, mp4, webm, ogg, flac) or a text file.</div><p><a href="/new">← Back</a></p>`);
+    }
     media = file;
   }
   if (String(form.get("kind") ?? "") === "text" && text === null) {
@@ -83,11 +88,11 @@ export async function POST(req: NextRequest) {
       courseId: identity!.courseId!,
       lectureId,
       mediaRef,
-      captureSource: String(form.get("captureSource") ?? "upload"),
+      captureSource: safeCaptureSource(form.get("captureSource")),
       consent: { noticeShown: form.get("noticeShown") === "on" },
     });
   } catch (e) {
-    if (e instanceof ConflictError) {
+    if (isError(e, "ConflictError")) {
       return htmlError(
         409,
         `<h1>Lecture already exists</h1><div class="notice">${escapeHtml(e.message)}</div><p><a href="/">← Dashboard</a></p>`,

@@ -2,6 +2,8 @@ import { redirect, forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
 import { getRepo } from "../../lib/singletons.ts";
 
+export const metadata = { title: "Audit trail · MeetIQ" };
+
 export default async function AuditPage() {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
