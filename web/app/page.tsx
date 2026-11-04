@@ -1,31 +1,35 @@
 import { redirect } from "next/navigation";
 import { getIdentity } from "../lib/auth.ts";
-import { getRepo, getAccounts } from "../lib/singletons.ts";
+import { getRepo, getAccounts, getCapture } from "../lib/singletons.ts";
 import { tilesFor, noun, toolHref } from "../lib/features.ts";
 import { getSectorRole, getSector } from "../../src/auth/sectors.ts";
 import { formatJoinCode } from "../../src/auth/accounts.ts";
-import { Tile } from "../components/Tile.tsx";
+import { Tile, Icon } from "../components/Tile.tsx";
 import { CopyCode } from "../components/CopyCode.tsx";
 import { DeleteLectureForm } from "../components/DeleteLectureForm.tsx";
 import { ProcessForm } from "../components/ProcessButton.tsx";
 import { LectureStatusBadge } from "../components/Badge.tsx";
+import { AutoRefresh } from "../components/AutoRefresh.tsx";
+
+export const metadata = { title: "Workspace · MeetIQ" };
 
 const ADMIN_HREF: Record<string, string> = { approvals: "/approvals", audit: "/audit", team: "/team" };
 
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ welcome?: string }>;
+  searchParams: Promise<{ welcome?: string; queued?: string }>;
 }) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
-  const { welcome } = await searchParams;
+  const { welcome, queued } = await searchParams;
 
   const lectures = await getRepo().listLecturesByCourse(identity.institutionId, identity.courseId!);
   const { inputs, tools, admin, access } = tilesFor(identity);
   const canManage = access.canManage;
   const processed = lectures.filter((l) => l.status === "processed").length;
   const waiting = lectures.filter((l) => l.status === "created").length;
+  const processing = lectures.filter((l) => l.status === "processing").length;
   const visible = canManage ? lectures : lectures.filter((l) => l.status === "processed");
   const one = noun(identity);
   const many = noun(identity, true);
@@ -35,10 +39,16 @@ export default async function HomePage({
 
   return (
     <>
+      {processing > 0 && <AutoRefresh intervalMs={4000} />}
       {welcome && (
         <div className="notice ok" role="status">
           Welcome, {identity.name.split(" ")[0]}! Your {title.toLowerCase()} account is ready.
           {inviteCode ? " Share the invite code below with your team." : ""}
+        </div>
+      )}
+      {queued && (
+        <div className="notice ok" role="status">
+          Processing started for {queued} — it&apos;s running in the background, this page refreshes automatically.
         </div>
       )}
       <span className="eyebrow">
@@ -52,13 +62,13 @@ export default async function HomePage({
       </p>
 
       <div className="stats">
-        <div className="stat"><b>{lectures.length}</b><span>{many[0].toUpperCase() + many.slice(1)}</span></div>
-        <div className="stat"><b>{processed}</b><span>Processed &amp; verified</span></div>
-        <div className="stat"><b>{waiting}</b><span>Waiting to process</span></div>
+        <div className="stat"><span className="stat-icon"><Icon name="notes" /></span><b>{lectures.length}</b><span>{many[0].toUpperCase() + many.slice(1)}</span></div>
+        <div className="stat"><span className="stat-icon"><Icon name="approvals" /></span><b>{processed}</b><span>Processed &amp; verified</span></div>
+        <div className="stat"><span className="stat-icon"><Icon name="record" /></span><b>{waiting}</b><span>Waiting to process</span></div>
       </div>
 
       {inviteCode && (
-        <div className="card">
+        <div className="card highlight">
           <div className="row">
             <div>
               <strong>Invite your team</strong>
@@ -101,6 +111,7 @@ export default async function HomePage({
       <div className="section-title">Your {many}</div>
       {visible.length === 0 && (
         <div className="empty">
+          <span className="empty-icon"><Icon name="upload" /></span>
           <strong>Nothing here yet</strong>
           <div>{canManage ? "Record, upload or paste something above to get started." : "Nothing has been approved and shared yet."}</div>
         </div>
@@ -122,19 +133,22 @@ export default async function HomePage({
                   {canManage && <ProcessForm id={l.id} />}
                   {canManage && <DeleteLectureForm id={l.id} />}
                 </>
-              ) : l.status === "failed" || l.status === "processing" ? (
+              ) : l.status === "failed" ? (
                 // Reprocessing in place isn't allowed (see the comment on
-                // LectureService.processLecture): a lecture stuck here can only be
-                // recovered by delete + recreate, so don't link into one with no valid content.
+                // LectureService.processLecture): a failed lecture can only
+                // be recovered by delete + recreate.
                 <>
                   <span className="kpi">
-                    {l.status === "failed"
-                      ? "Processing failed."
-                      : "Still processing. If this persists, the run likely crashed."}{" "}
-                    {canManage ? "Delete and create it again to retry." : "Ask your administrator to retry."}
+                    Processing failed. {canManage ? "Delete and create it again to retry." : "Ask your administrator to retry."}
                   </span>
                   {canManage && <DeleteLectureForm id={l.id} />}
                 </>
+              ) : l.status === "processing" ? (
+                // Running on the background job queue (see
+                // LectureService.enqueueProcessLecture) — a normal,
+                // transient state, not a crash. This page polls itself
+                // (AutoRefresh above) until it flips to processed/failed.
+                <span className="kpi">Processing in the background — this page refreshes automatically.</span>
               ) : (
                 <>
                   {canManage && (
@@ -153,19 +167,27 @@ export default async function HomePage({
         </div>
       ))}
 
-      {canManage && identity.sector === "uni" && !identity.owner && identity.id.startsWith("demo-") && (
-        <div className="card">
-          <div className="row">
-            <div>
-              <strong>Import from capture system</strong>
-              <div className="kpi">Pull existing recordings from Echo360/Panopto. Demo uses a mock source.</div>
+      {canManage && identity.id.startsWith("demo-") && (() => {
+        const capture = getCapture();
+        const live = capture.name !== "mock";
+        return (
+          <div className="card">
+            <div className="row">
+              <div>
+                <strong>Import from {live ? capture.name : "capture system"}</strong>
+                <div className="kpi">
+                  {live
+                    ? `Pulls real recordings in via the live "${capture.name}" connector.`
+                    : "Pull existing recordings from Echo360/Panopto/Zoom. Demo uses a mock source — set CAPTURE_SOURCE to pull real ones."}
+                </div>
+              </div>
+              <form action="/import" method="post">
+                <button className="btn small ghost">{live ? `Import from ${capture.name}` : "Import from Echo360 (demo)"}</button>
+              </form>
             </div>
-            <form action="/import" method="post">
-              <button className="btn small ghost">Import from Echo360 (demo)</button>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }

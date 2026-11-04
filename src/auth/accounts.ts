@@ -15,6 +15,7 @@ import { hashPassword, verifyPassword, burnVerify, passwordProblem } from "./pas
 import { getSector, getSectorRole, selectableRoles } from "./sectors.ts";
 
 export class AccountError extends Error {
+  override name = "AccountError";
   readonly status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -98,7 +99,9 @@ export class AccountService {
         400,
         input.mode === "create"
           ? "Creating an organisation makes you its administrator. Choose one of the administrator roles."
-          : "Choose a role. Administrator roles can't be claimed with an invite code.",
+          : sector.roles.some((r) => r.id === input.roleId)
+            ? "Administrator roles can't be claimed with an invite code."
+            : "Choose a valid role from the list for this field.",
       );
     }
 
@@ -206,7 +209,7 @@ export class AccountService {
    * same organisation (no email needed). Returned once; the member should
    * change it after signing in.
    */
-  async resetMemberPassword(identity: Identity, email: string): Promise<{ name: string; email: string; temporary: string }> {
+  async resetMemberPassword(identity: Identity, email: string): Promise<{ id: string; name: string; email: string; temporary: string }> {
     if (identity.role !== "admin") throw new AccountError(403, "Only an administrator can reset a password.");
     const target = (await this.repo.listUsers(identity.institutionId)).find((u) => u.email === normalizeEmail(email));
     if (!target) throw new AccountError(404, "No such member in your organisation.");
@@ -214,7 +217,7 @@ export class AccountService {
     const temporary = tempPassword();
     await this.repo.updatePasswordHash(target.id, await hashPassword(temporary));
     await this.repo.audit({ institutionId: identity.institutionId, actor: identity.id, action: "password.reset", target: target.email, ts: new Date().toISOString() });
-    return { name: target.name, email: target.email, temporary };
+    return { id: target.id, name: target.name, email: target.email, temporary };
   }
 
   async identityFor(user: UserRecord): Promise<Identity> {

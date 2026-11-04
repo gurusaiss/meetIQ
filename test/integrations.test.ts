@@ -43,7 +43,7 @@ test("imported lecture carries captured consent and can be processed", async () 
   const [id] = await service.importFromCapture("inst-a", "cs101", new MockCaptureSource(), "CS101-2026S", FACULTY);
   // consentCaptured=true in the mock → compliance gate passes.
   const assets = await service.processLecture("inst-a", id!);
-  assert.equal(assets.length, 3);
+  assert.equal(assets.length, 4);
 });
 
 test("students cannot import recordings", async () => {
@@ -71,6 +71,22 @@ test("publishToLms sends only approved assets", async () => {
   assert.equal(lms.published.length, 1);
   assert.equal(lms.published[0]!.externalCourseId, "CS101-2026S");
   assert.equal(lms.published[0]!.item.body.length > 0, true);
+});
+
+test("publishToLms renders each asset type with its own exporter — an actions asset must not be mislabeled as a quiz", async () => {
+  const { service } = await svc();
+  const [id] = await service.importFromCapture("inst-a", "cs101", new MockCaptureSource(), "CS101-2026S", FACULTY);
+  const assets = await service.processLecture("inst-a", id!);
+  const lms = new MockLmsConnector();
+
+  for (const a of assets) await service.approveAsset("inst-a", a.id, FACULTY);
+  await service.publishToLms("inst-a", id!, lms, "CS101-2026S", FACULTY);
+
+  const published = new Map(lms.published.map((p) => [p.item.type, p.item]));
+  assert.deepEqual([...published.keys()].sort(), ["actions", "flashcards", "notes", "quiz"]);
+  const actionsItem = published.get("actions")!;
+  assert.match(actionsItem.title, /Decisions & Action Items/);
+  assert.match(actionsItem.body, /# .* — Decisions & Action Items/);
 });
 
 test("students cannot publish to LMS", async () => {

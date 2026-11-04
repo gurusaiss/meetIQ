@@ -1,17 +1,19 @@
 import type { ReactNode } from "react";
 import type { StoredAsset } from "../../src/persistence/repository.ts";
-import type { RevisionNotes, Flashcard, Quiz } from "../../src/types.ts";
+import type { RevisionNotes, Flashcard, Quiz, ActionsAndDecisions } from "../../src/types.ts";
 import { StatusBadge } from "./Badge.tsx";
 import { NotesView } from "./NotesView.tsx";
 import { FlashcardsReview } from "./FlashcardsView.tsx";
 import { FlashcardsStudy } from "./FlashcardsStudy.tsx";
 import { QuizReview } from "./QuizView.tsx";
 import { QuizStudy } from "./QuizStudy.tsx";
+import { ActionsView } from "./ActionsView.tsx";
 
 const META = {
   notes: { icon: "01", title: "Revision notes" },
   flashcards: { icon: "02", title: "Flashcards" },
   quiz: { icon: "03", title: "Quiz" },
+  actions: { icon: "04", title: "Decisions & action items" },
 } as const;
 
 function pct(n: number): string {
@@ -39,9 +41,11 @@ export function AssetPanel({
   } else if (asset.type === "flashcards") {
     const cards = (asset.content as { cards: Flashcard[] }).cards;
     inner = mode === "review" ? <FlashcardsReview cards={cards} /> : <FlashcardsStudy cards={cards} />;
-  } else {
+  } else if (asset.type === "quiz") {
     const quiz = asset.content as Quiz;
     inner = mode === "review" ? <QuizReview quiz={quiz} /> : <QuizStudy quiz={quiz} />;
+  } else {
+    inner = <ActionsView actions={asset.content as ActionsAndDecisions} />;
   }
 
   return (

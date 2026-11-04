@@ -36,15 +36,17 @@ import {
   auditPage,
   loginPage,
   layout,
+  esc,
 } from "./render.ts";
 import {
   notesToMarkdown,
   flashcardsToAnkiCsv,
   quizToMarkdown,
+  actionsToMarkdown,
 } from "../export/exporters.ts";
-import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
+import type { RevisionNotes, Quiz, Flashcard, ActionsAndDecisions } from "../types.ts";
 import { getCaptureSource } from "../integrations/capture.ts";
-import { MockLmsConnector } from "../integrations/lms.ts";
+import { getLmsConnector } from "../integrations/lms.ts";
 import { isValidLectureId } from "./lecture-id.ts";
 
 const INSTITUTION_ID = "inst-a";
@@ -76,8 +78,10 @@ const service = new LectureService(repo);
 const sessions = new SessionStore();
 // Login-endpoint abuse guard: 10 attempts / minute per client IP.
 const loginLimiter = new RateLimiter(10, 60_000);
-// One mock LMS connector for the process lifetime so pushes accumulate.
-const lms = new MockLmsConnector();
+// One connector for the process lifetime so pushes accumulate.
+const lms = getLmsConnector(config.integrations.lms, config.integrations.slack);
+const capture = getCaptureSource(config.integrations.capture, config.integrations.zoom);
+logger.info("integrations.selected", { capture: config.integrations.capture, lms: config.integrations.lms });
 // External course identifier as it exists in the LMS/capture system.
 const EXTERNAL_COURSE = "CS101-2026S";
 
@@ -196,7 +200,8 @@ const server = createServer(async (req, res) => {
     // ── Dashboard ──
     if (method === "GET" && path === "/") {
       const lectures = await repo.listLecturesByCourse(INSTITUTION_ID, COURSE_ID);
-      return html(dashboardPage(COURSE_TITLE, lectures, identity, nonce));
+      const queuedId = url.searchParams.get("queued") ?? undefined;
+      return html(dashboardPage(COURSE_TITLE, lectures, identity, nonce, queuedId));
     }
 
     // ── Create lecture (faculty/ta/admin) ──
@@ -249,7 +254,9 @@ const server = createServer(async (req, res) => {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       const lectureId = decodeURIComponent(m[1]!);
       try {
-        await service.processLecture(INSTITUTION_ID, lectureId, {
+        // Enqueues and returns immediately — the pipeline runs on the
+        // background job queue, not inline in this request.
+        await service.enqueueProcessLecture(INSTITUTION_ID, lectureId, {
           diarize: true,
           speakerHints: { SPEAKER_0: "Prof. Anika", SPEAKER_1: "Student" },
         });
@@ -280,19 +287,22 @@ const server = createServer(async (req, res) => {
         }
         throw e;
       }
-      return redirect(`/lectures/${encodeURIComponent(lectureId)}/review`);
+      return redirect(`/?queued=${encodeURIComponent(lectureId)}`);
     }
 
     // ── Import from capture source (faculty/ta/admin) ──
     if (method === "POST" && path === "/import") {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
-      await service.importFromCapture(
-        INSTITUTION_ID,
-        COURSE_ID,
-        getCaptureSource("mock"),
-        EXTERNAL_COURSE,
-        identity,
-      );
+      try {
+        await service.importFromCapture(INSTITUTION_ID, COURSE_ID, capture, EXTERNAL_COURSE, identity);
+      } catch (e) {
+        logger.error("capture.import.failed", { error: e instanceof Error ? e.message : String(e) });
+        const detail = e instanceof Error ? e.message.slice(0, 300) : "Unknown error";
+        return html(
+          layout("Error", `<h1>Import failed</h1><div class="notice">${esc(detail)}</div><p style="margin-top:16px"><a href="/">← Dashboard</a></p>`, identity, nonce),
+          502,
+        );
+      }
       return redirect("/");
     }
 
@@ -303,16 +313,26 @@ const server = createServer(async (req, res) => {
       const lectureId = decodeURIComponent(m[1]!);
       const lecture = await repo.getLecture(INSTITUTION_ID, lectureId);
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
-      const count = await service.publishToLms(
-        INSTITUTION_ID,
-        lectureId,
-        lms,
-        EXTERNAL_COURSE,
-        identity,
-      );
+      let count: number;
+      try {
+        count = await service.publishToLms(INSTITUTION_ID, lectureId, lms, EXTERNAL_COURSE, identity);
+      } catch (e) {
+        logger.error("lecture.publish.failed", { lectureId, error: e instanceof Error ? e.message : String(e) });
+        return html(
+          layout(
+            "Error",
+            `<h1>Publishing failed</h1><div class="notice">The "${esc(lms.name)}" connector did not accept the upload. Nothing was published.</div>
+             <p style="margin-top:16px"><a href="/lectures/${encodeURIComponent(lectureId)}/review">← Back to review</a></p>`,
+            identity,
+            nonce,
+          ),
+          502,
+        );
+      }
+      const total = lms.published?.length ?? count;
       const notice =
         count > 0
-          ? `Published ${count} approved asset(s) to the LMS (mock connector). Total pushed this session: ${lms.published.length}.`
+          ? `Published ${count} approved asset(s) via the "${lms.name}" connector${lms.name === "mock" ? " (demo — nothing leaves this app yet)" : ""}. Total pushed this session: ${total}.`
           : `Nothing to publish — approve at least one asset first.`;
       const queue = await service.reviewQueue(INSTITUTION_ID, lectureId);
       return html(reviewPage(lecture, queue, identity, notice, nonce));
@@ -366,7 +386,7 @@ const server = createServer(async (req, res) => {
     }
 
     // ── Export (approved assets only; any authenticated) ──
-    m = path.match(/^\/lectures\/([^/]+)\/export\/(notes\.md|flashcards\.csv|quiz\.md)$/);
+    m = path.match(/^\/lectures\/([^/]+)\/export\/(notes\.md|flashcards\.csv|quiz\.md|actions\.md)$/);
     if (method === "GET" && m) {
       const lectureId = decodeURIComponent(m[1]!);
       const file = m[2]!;
@@ -385,6 +405,11 @@ const server = createServer(async (req, res) => {
         const a = approved.find((x) => x.type === "flashcards");
         if (!a) return html(layout("Not available", "<h1>Flashcards not released yet</h1>", identity, nonce), 404);
         return download(flashcardsToAnkiCsv((a.content as { cards: Flashcard[] }).cards), "text/csv", `${lectureId}-flashcards.csv`);
+      }
+      if (file === "actions.md") {
+        const a = approved.find((x) => x.type === "actions");
+        if (!a) return html(layout("Not available", "<h1>Decisions & action items not released yet</h1>", identity, nonce), 404);
+        return download(actionsToMarkdown(lectureId, a.content as ActionsAndDecisions), "text/markdown", `${lectureId}-actions.md`);
       }
       const a = approved.find((x) => x.type === "quiz");
       if (!a) return html(layout("Not available", "<h1>Quiz not released yet</h1>", identity, nonce), 404);
@@ -440,19 +465,23 @@ seedInstitution
     process.exit(1);
   });
 
-// Graceful shutdown — stop accepting connections, then close the datastore.
-// SIGTERM is the container/orchestrator signal (the prod path); SIGINT is
-// Ctrl+C; SIGBREAK covers Windows consoles.
+// Graceful shutdown — stop accepting connections, let in-flight background
+// jobs (lecture processing) finish, then close the datastore. SIGTERM is the
+// container/orchestrator signal (the prod path); SIGINT is Ctrl+C; SIGBREAK
+// covers Windows consoles.
 let shuttingDown = false;
 for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"] as const) {
   process.on(sig, () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info("server.shutdown", { signal: sig });
+    logger.info("server.shutdown", { signal: sig, queueSize: service.queue.size });
     server.close(() => {
-      repo.close().finally(() => process.exit(0));
+      service.queue
+        .onIdle()
+        .finally(() => repo.close())
+        .finally(() => process.exit(0));
     });
-    // Safety net if connections hang.
+    // Safety net if connections or queued jobs hang.
     setTimeout(() => process.exit(0), 5000).unref();
   });
 }

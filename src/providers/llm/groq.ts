@@ -5,6 +5,7 @@ import type {
   NotesDraft,
   FlashcardsDraft,
   QuizDraft,
+  ActionsDraft,
 } from "./types.ts";
 
 /**
@@ -74,6 +75,15 @@ export class GroqLLMProvider implements LLMProvider {
       `Write one MCQ per topic. Each has 3-4 options, a correct answerIndex, and an explanation citing only segment ids shown.\n\nTopics:\n${topics.map((x) => `- ${x.title} [${x.segmentIds.join(", ")}]`).join("\n")}\n\nTranscript:\n${render(t)}`,
       "quiz",
       QUIZ_SCHEMA,
+    );
+  }
+
+  async extractActions(t: Transcript, topics: TopicSegment[]): Promise<ActionsDraft> {
+    return this.callJSON<ActionsDraft>(
+      "You extract decisions and action items from a meeting transcript. Every decision and action item MUST cite the transcript segment ids it is derived from. Do not invent facts.",
+      `List the decisions made and the action items assigned in this meeting. For each action item, name the owner if the transcript says who, otherwise null. Cite only segment ids shown.\n\nTopics:\n${topics.map((x) => `- ${x.title} [${x.segmentIds.join(", ")}]`).join("\n")}\n\nTranscript:\n${render(t)}`,
+      "actions",
+      ACTIONS_SCHEMA,
     );
   }
 
@@ -201,6 +211,24 @@ const QUIZ_SCHEMA: SchemaObject = {
           answerIndex: { type: "integer" },
           explanation: STATEMENT,
         },
+      },
+    },
+  },
+};
+
+const ACTIONS_SCHEMA: SchemaObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["decisions", "actionItems"],
+  properties: {
+    decisions: { type: "array", items: STATEMENT },
+    actionItems: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["owner", "statement"],
+        properties: { owner: { type: ["string", "null"] }, statement: STATEMENT },
       },
     },
   },

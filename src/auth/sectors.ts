@@ -24,7 +24,7 @@ export interface SectorRole {
 /** Tile keys whose title/description a sector may reword. */
 export type WordKey =
   | "record" | "upload" | "text" | "file"
-  | "notes" | "flashcards" | "quiz" | "flowchart" | "slides" | "search";
+  | "notes" | "flashcards" | "quiz" | "flowchart" | "slides" | "search" | "actions";
 
 export interface Sector {
   id: string;
@@ -67,6 +67,7 @@ export const SECTORS: Sector[] = [
       notes: ["Class notes", "Cited, confidence-scored notes for each class."],
       slides: ["Class slides", "Download a PowerPoint deck of the verified notes."],
       search: ["Ask your classes", "Search every class, with the exact moment cited."],
+      actions: ["Follow-ups", "Action items assigned in class, cited to the exact moment."],
     },
   },
   {
@@ -88,6 +89,7 @@ export const SECTORS: Sector[] = [
       notes: ["Meeting minutes", "Cited minutes with decisions, by topic."],
       slides: ["Meeting slides", "Download a deck of the verified minutes."],
       search: ["Ask your meetings", "Search every meeting, with timestamps."],
+      actions: ["Decisions & action items", "Who owns what, cited to the exact moment it was agreed."],
     },
   },
   {
@@ -109,6 +111,7 @@ export const SECTORS: Sector[] = [
       notes: ["Verified transcript", "Cited summary with confidence per statement."],
       slides: ["Summary deck", "Download a deck of the verified summary."],
       search: ["Search matters", "Find any statement, cited to the exact moment."],
+      actions: ["Rulings & next steps", "Commitments and directives, cited to the exact moment stated."],
     },
   },
   {
@@ -130,6 +133,7 @@ export const SECTORS: Sector[] = [
       notes: ["Case notes", "Cited teaching notes by topic."],
       slides: ["Teaching slides", "Download a deck of the verified notes."],
       search: ["Ask your rounds", "Search every round, with timestamps."],
+      actions: ["Follow-ups", "Care and teaching follow-ups, cited to the exact moment raised."],
     },
   },
   {
@@ -151,6 +155,7 @@ export const SECTORS: Sector[] = [
       notes: ["Course material", "Cited, verified material for each session."],
       slides: ["Course slides", "Download a deck of the verified material."],
       search: ["Ask your sessions", "Search every session, with timestamps."],
+      actions: ["Practice follow-ups", "What to practice before next session, cited to the exact moment."],
     },
   },
   {
@@ -172,6 +177,7 @@ export const SECTORS: Sector[] = [
       notes: ["Minutes", "Cited, verified minutes by topic."],
       slides: ["Minutes deck", "Download a deck of the verified minutes."],
       search: ["Search records", "Find any statement, cited to the exact moment."],
+      actions: ["Resolutions & follow-ups", "Directives and owners, cited to the exact moment decided."],
     },
   },
 ];

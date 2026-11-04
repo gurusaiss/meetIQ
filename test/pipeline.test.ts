@@ -12,11 +12,11 @@ const input = {
   diarize: true,
 };
 
-test("pipeline runs end-to-end and produces all three asset types", async () => {
+test("pipeline runs end-to-end and produces all four asset types", async () => {
   const r = await processLecture(input);
   assert.equal(r.transcript.segments.length > 0, true);
   const types = r.assets.map((a) => a.type).sort();
-  assert.deepEqual(types, ["flashcards", "notes", "quiz"]);
+  assert.deepEqual(types, ["actions", "flashcards", "notes", "quiz"]);
   assert.equal(r.topics.length > 0, true);
   assert.equal(r.chunks.length, r.topics.length);
 });

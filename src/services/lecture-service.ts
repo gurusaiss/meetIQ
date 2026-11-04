@@ -23,12 +23,17 @@ import { search } from "../pipeline/rag.ts";
 import { getEmbeddingsProvider } from "../providers/embeddings/index.ts";
 import type { CaptureSource } from "../integrations/capture.ts";
 import type { LmsConnector, LmsItem } from "../integrations/lms.ts";
+import type { JobQueue } from "../queue/job-queue.ts";
+import { InMemoryJobQueue } from "../queue/job-queue.ts";
+import { config } from "../config.ts";
+import { logger } from "../observability/logger.ts";
 import {
   notesToMarkdown,
   flashcardsToAnkiCsv,
   quizToMarkdown,
+  actionsToMarkdown,
 } from "../export/exporters.ts";
-import type { RevisionNotes, Quiz, Flashcard } from "../types.ts";
+import type { RevisionNotes, Quiz, Flashcard, ActionsAndDecisions } from "../types.ts";
 
 export type Role = "student" | "faculty" | "ta" | "admin" | "auditor";
 export interface Actor {
@@ -36,9 +41,18 @@ export interface Actor {
   role: Role;
 }
 
-export class ComplianceError extends Error {}
-export class AuthorizationError extends Error {}
-export class ConflictError extends Error {}
+export class ComplianceError extends Error {
+  override name = "ComplianceError";
+}
+export class AuthorizationError extends Error {
+  override name = "AuthorizationError";
+}
+export class ConflictError extends Error {
+  override name = "ConflictError";
+}
+export class NotFoundError extends Error {
+  override name = "NotFoundError";
+}
 
 export interface CreateLectureInput {
   institutionId: string;
@@ -51,9 +65,16 @@ export interface CreateLectureInput {
 
 export class LectureService {
   private readonly repo: Repository;
+  private readonly jobs: JobQueue;
 
-  constructor(repo: Repository) {
+  constructor(repo: Repository, jobs: JobQueue = new InMemoryJobQueue({ concurrency: config.queue.concurrency })) {
     this.repo = repo;
+    this.jobs = jobs;
+  }
+
+  /** Exposed for graceful shutdown (drain before exit) and tests (await background work). */
+  get queue(): JobQueue {
+    return this.jobs;
   }
 
   async seedInstitution(i: Institution, course: Course): Promise<void> {
@@ -82,7 +103,17 @@ export class LectureService {
       captureSource: input.captureSource,
       createdAt: new Date().toISOString(),
     };
-    await this.repo.createLecture(lecture);
+    try {
+      await this.repo.createLecture(lecture);
+    } catch (e) {
+      // Lecture ids are unique across the whole database, so another organisation may already hold this one.
+      // Say nothing about who has it.
+      const msg = e instanceof Error ? e.message : "";
+      if (/unique|duplicate key|23505/i.test(msg)) {
+        throw new ConflictError(`Lecture id ${input.lectureId} is already in use. Choose a different id.`);
+      }
+      throw e;
+    }
 
     const consent: ConsentRecord = {
       lectureId: input.lectureId,
@@ -103,7 +134,7 @@ export class LectureService {
     opts: { diarize?: boolean; speakerHints?: Record<string, string> } = {},
   ): Promise<StoredAsset[]> {
     const lecture = await this.repo.getLecture(institutionId, lectureId);
-    if (!lecture) throw new Error(`Lecture ${lectureId} not found`);
+    if (!lecture) throw new NotFoundError(`Lecture ${lectureId} not found`);
 
     // Asset/chunk ids are deterministic per lecture (`${lectureId}:${type}:${i}`,
     // `${lectureId}:chunk:${topicId}`) and the underlying inserts are plain
@@ -126,17 +157,77 @@ export class LectureService {
     await this.assertConsent(institutionId, lectureId);
 
     await this.repo.setLectureStatus(institutionId, lectureId, "processing");
+    return this.runPipelineAndPersist(institutionId, lectureId, lecture.courseId, lecture.mediaRef, opts);
+  }
+
+  /**
+   * Same validation and compliance gate as `processLecture`, but returns as
+   * soon as the lecture is marked `processing` — the actual pipeline run
+   * (transcription + several LLM calls) happens on the background job queue
+   * instead of holding the caller's request open. This is the entry point
+   * the HTTP layer uses; `processLecture` stays available as the direct,
+   * synchronous call (useful for the CLI demo, and for tests that want a
+   * deterministic result without reaching into the queue).
+   *
+   * Errors from validation/consent (bad state, missing consent) still throw
+   * synchronously — those are the caller's mistake and deserve an immediate
+   * response, not a silently-failed background job. Errors from the pipeline
+   * itself (bad audio, provider failure) happen after this resolves; they
+   * flip the lecture to `failed`, same as the synchronous path, visible on
+   * the dashboard — there is no HTTP response left to carry them.
+   */
+  async enqueueProcessLecture(
+    institutionId: string,
+    lectureId: string,
+    opts: { diarize?: boolean; speakerHints?: Record<string, string> } = {},
+  ): Promise<void> {
+    const lecture = await this.repo.getLecture(institutionId, lectureId);
+    if (!lecture) throw new NotFoundError(`Lecture ${lectureId} not found`);
+    if (lecture.status !== "created") {
+      throw new ConflictError(
+        `Lecture ${lectureId} is already ${lecture.status === "failed" ? "in a failed state" : lecture.status} — ` +
+          `delete it and create it again to retry processing.`,
+      );
+    }
+    await this.assertConsent(institutionId, lectureId);
+
+    await this.repo.setLectureStatus(institutionId, lectureId, "processing");
+    this.jobs.enqueue(async () => {
+      try {
+        await this.runPipelineAndPersist(institutionId, lectureId, lecture.courseId, lecture.mediaRef, opts);
+      } catch (err) {
+        // runPipelineAndPersist already recorded "failed" status; this only
+        // stops the error from being an unhandled rejection inside the queue.
+        logger.error("lecture.process.job_failed", {
+          institutionId,
+          lectureId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  }
+
+  /** Runs the pipeline and persists its outputs. Shared by the synchronous
+   *  and queued processing paths — the lecture is already `processing` by
+   *  the time this is called. */
+  private async runPipelineAndPersist(
+    institutionId: string,
+    lectureId: string,
+    courseId: string,
+    mediaRef: string,
+    opts: { diarize?: boolean; speakerHints?: Record<string, string> },
+  ): Promise<StoredAsset[]> {
     try {
       const result = await runPipeline({
         lectureId,
-        mediaRef: lecture.mediaRef,
+        mediaRef,
         ...(opts.diarize !== undefined ? { diarize: opts.diarize } : {}),
         ...(opts.speakerHints ? { speakerHints: opts.speakerHints } : {}),
       });
 
       await this.repo.saveTranscript(institutionId, result.transcript);
       const stored = await this.repo.saveAssets(institutionId, lectureId, result.assets);
-      await this.repo.saveChunks(institutionId, lecture.courseId, result.chunks);
+      await this.repo.saveChunks(institutionId, courseId, result.chunks);
       await this.repo.setLectureStatus(institutionId, lectureId, "processed");
       await this.audit(institutionId, "system", "lecture.processed", lectureId);
       return stored;
@@ -167,7 +258,7 @@ export class LectureService {
       );
     }
     const asset = await this.repo.getAsset(institutionId, assetId);
-    if (!asset) throw new Error(`Asset ${assetId} not found`);
+    if (!asset) throw new NotFoundError(`Asset ${assetId} not found`);
     await this.repo.setAssetStatus(institutionId, assetId, "approved");
     await this.audit(institutionId, actor.id, "asset.approved", assetId);
     return { ...asset, status: "approved" };
@@ -205,7 +296,7 @@ export class LectureService {
       throw new AuthorizationError(`Role ${actor.role} cannot delete lectures.`);
     }
     if (!(await this.repo.getLecture(institutionId, lectureId))) {
-      throw new Error(`Lecture ${lectureId} not found`);
+      throw new NotFoundError(`Lecture ${lectureId} not found`);
     }
     await this.repo.deleteLecture(institutionId, lectureId);
     await this.audit(institutionId, actor.id, "lecture.deleted", lectureId);
@@ -303,11 +394,20 @@ export class LectureService {
           contentType: "text/csv",
         };
       }
+      if (a.type === "quiz") {
+        return {
+          lectureId,
+          type: "quiz",
+          title: `${lectureId} — Quiz`,
+          body: quizToMarkdown(lectureId, a.content as Quiz),
+          contentType: "text/markdown",
+        };
+      }
       return {
         lectureId,
-        type: "quiz",
-        title: `${lectureId} — Quiz`,
-        body: quizToMarkdown(lectureId, a.content as Quiz),
+        type: "actions",
+        title: `${lectureId} — Decisions & Action Items`,
+        body: actionsToMarkdown(lectureId, a.content as ActionsAndDecisions),
         contentType: "text/markdown",
       };
     });

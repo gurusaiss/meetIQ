@@ -1,7 +1,9 @@
 import { redirect, notFound, forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getRepo, getService } from "../../../../lib/singletons.ts";
+import { getRepo, getService, getLms } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
+
+export const metadata = { title: "Review · MeetIQ" };
 
 export default async function ReviewPage({
   params,
@@ -21,6 +23,8 @@ export default async function ReviewPage({
 
   const assets = await getService().reviewQueue(identity.institutionId, lectureId);
   const approvedCount = assets.filter((a) => a.status === "approved").length;
+  const lms = getLms();
+  const liveLms = lms.name !== "mock";
 
   return (
     <>
@@ -34,7 +38,7 @@ export default async function ReviewPage({
       {published !== undefined && (
         <div className="notice">
           {Number(published) > 0
-            ? `Published ${published} approved asset(s) to the LMS (mock connector). Total pushed this session: ${total}.`
+            ? `Published ${published} approved asset(s) via the "${lms.name}" connector${liveLms ? "" : " (demo — nothing leaves this app yet)"}. Total pushed this session: ${total}.`
             : "Nothing to publish — approve at least one asset first."}
         </div>
       )}
@@ -48,10 +52,11 @@ export default async function ReviewPage({
       <div className="card">
         <div className="row">
           <div>
-            <strong>Publish to LMS</strong>
+            <strong>Publish{liveLms ? ` via ${lms.name}` : " to LMS"}</strong>
             <div className="kpi">
-              Pushes {approvedCount} approved asset(s) into Canvas/Moodle. Demo uses a
-              mock connector.
+              {liveLms
+                ? `Pushes ${approvedCount} approved asset(s) out through the live "${lms.name}" connector — this leaves the app for real.`
+                : `Pushes ${approvedCount} approved asset(s) to a demo LMS connector. Nothing leaves this app yet; set LMS_CONNECTOR (and its credentials) to push for real — see .env.example.`}
             </div>
           </div>
           <form action={`/lectures/${encodeURIComponent(lectureId)}/publish`} method="post">

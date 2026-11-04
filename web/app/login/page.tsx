@@ -3,6 +3,8 @@ import { getIdentity } from "../../lib/auth.ts";
 import { config } from "../../../src/config.ts";
 import { SECTORS } from "../../../src/auth/sectors.ts";
 
+export const metadata = { title: "Sign in · MeetIQ" };
+
 const DEMO_ROLES = [
   { value: "faculty", title: "Faculty", desc: "Record, review, approve" },
   { value: "ta", title: "TA", desc: "Review & approve" },

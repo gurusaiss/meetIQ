@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { isError } from "../../../lib/http.ts";
 import { getAccounts } from "../../../lib/singletons.ts";
 import { tooManyAttempts, startSession, redirectTo, field } from "../../../lib/session.ts";
 import { AccountError, normalizeEmail } from "../../../../src/auth/accounts.ts";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     const identity = await getAccounts().signIn(email, String(form.get("password") ?? ""));
     return startSession(req, identity);
   } catch (e) {
-    if (e instanceof AccountError) return fail(e.message);
+    if (isError(e, "AccountError")) return fail(e.message);
     console.error("signin.failed", e);
     return fail("Something went wrong signing you in. Please try again.");
   }

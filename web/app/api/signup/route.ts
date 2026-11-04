@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { isError } from "../../../lib/http.ts";
 import { getAccounts } from "../../../lib/singletons.ts";
 import { tooManyAttempts, startSession, redirectTo, field } from "../../../lib/session.ts";
 import { AccountError, normalizeEmail } from "../../../../src/auth/accounts.ts";
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     });
     return startSession(req, identity, "/?welcome=1");
   } catch (e) {
-    if (e instanceof AccountError) return fail(e.message);
+    if (isError(e, "AccountError")) return fail(e.message);
     console.error("signup.failed", e);
     return fail("Something went wrong creating your account. Please try again.");
   }

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
 import { getService } from "../../../../lib/singletons.ts";
-import { ComplianceError, ConflictError } from "../../../../../src/services/lecture-service.ts";
-import { forbidResponse, htmlError, escapeHtml } from "../../../../lib/http.ts";
+import { ComplianceError, ConflictError, NotFoundError } from "../../../../../src/services/lecture-service.ts";
+import { forbidResponse, htmlError, escapeHtml, isError } from "../../../../lib/http.ts";
 
 export async function POST(
   req: NextRequest,
@@ -13,18 +13,20 @@ export async function POST(
   const { id: lectureId } = await params;
 
   try {
-    await getService().processLecture(identity!.institutionId, lectureId, {
+    // Enqueues and returns immediately — the pipeline (transcription + LLM
+    // calls) runs on the background job queue, not inline in this request.
+    await getService().enqueueProcessLecture(identity!.institutionId, lectureId, {
       diarize: true,
-      speakerHints: { SPEAKER_0: "Prof. Anika", SPEAKER_1: "Student" },
     });
   } catch (e) {
-    if (e instanceof ComplianceError) {
+    if (isError(e, "ComplianceError")) {
       return htmlError(
         409,
         `<h1>Processing blocked</h1><div class="notice">${escapeHtml(e.message)}</div><p><a href="/">← Dashboard</a></p>`,
       );
     }
-    if (e instanceof ConflictError) {
+    if (isError(e, "NotFoundError")) return htmlError(404, `<h1>Lecture not found</h1><p><a href="/">← Dashboard</a></p>`);
+    if (isError(e, "ConflictError")) {
       return htmlError(
         409,
         `<h1>Cannot process</h1><div class="notice">${escapeHtml(e.message)}</div><p><a href="/">← Dashboard</a></p>`,
@@ -42,7 +44,9 @@ export async function POST(
     );
   }
 
-  return NextResponse.redirect(new URL(`/lectures/${encodeURIComponent(lectureId)}/review`, req.url), {
+  // Nothing to review yet — the job just started. Back to the dashboard,
+  // which shows the lecture as "processing" and refreshes itself.
+  return NextResponse.redirect(new URL(`/?queued=${encodeURIComponent(lectureId)}`, req.url), {
     status: 303,
   });
 }

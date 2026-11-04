@@ -6,6 +6,8 @@ import { Tile } from "../../components/Tile.tsx";
 import { ProcessForm } from "../../components/ProcessButton.tsx";
 import { LectureStatusBadge } from "../../components/Badge.tsx";
 
+export const metadata = { title: "Choose a session · MeetIQ" };
+
 export default async function PickPage({
   searchParams,
 }: {

@@ -9,6 +9,7 @@ import {
   ComplianceError,
   AuthorizationError,
   ConflictError,
+  NotFoundError,
 } from "../src/services/lecture-service.ts";
 import type { Institution, Course } from "../src/persistence/repository.ts";
 
@@ -48,11 +49,61 @@ async function processed(service: LectureService, lectureId = "lec-1") {
 test("process persists transcript, assets, and chunks", async () => {
   const { repo, service } = await svc();
   const assets = await processed(service);
-  assert.equal(assets.length, 3);
+  assert.equal(assets.length, 4);
   assert.ok(await repo.getTranscript("inst-a", "lec-1"));
-  assert.equal((await repo.listAssets("inst-a", "lec-1")).length, 3);
+  assert.equal((await repo.listAssets("inst-a", "lec-1")).length, 4);
   assert.equal((await repo.listCourseChunks("inst-a", "course-cs101")).length > 0, true);
   assert.equal((await repo.getLecture("inst-a", "lec-1"))?.status, "processed");
+});
+
+test("enqueueProcessLecture returns before the pipeline finishes, then settles on the background queue", async () => {
+  const { repo, service } = await svc();
+  await service.createLecture({
+    institutionId: "inst-a",
+    courseId: "course-cs101",
+    lectureId: "lec-async",
+    mediaRef: "media://x",
+    captureSource: "upload",
+    consent: { noticeShown: true },
+  });
+
+  await service.enqueueProcessLecture("inst-a", "lec-async", { diarize: true });
+  // The HTTP-facing call has already returned — the lecture is marked
+  // `processing` synchronously, but nothing has been persisted yet because
+  // the pipeline itself runs on the queue, not inline here.
+  assert.equal((await repo.getLecture("inst-a", "lec-async"))?.status, "processing");
+  assert.equal((await repo.listAssets("inst-a", "lec-async")).length, 0);
+
+  await service.queue.onIdle();
+
+  assert.equal((await repo.getLecture("inst-a", "lec-async"))?.status, "processed");
+  assert.equal((await repo.listAssets("inst-a", "lec-async")).length, 4);
+  assert.ok(await repo.getTranscript("inst-a", "lec-async"));
+});
+
+test("enqueueProcessLecture still validates synchronously (bad state/consent throw immediately, nothing queued)", async () => {
+  const { repo, service } = await svc();
+
+  await assert.rejects(
+    () => service.enqueueProcessLecture("inst-a", "no-such-lecture"),
+    NotFoundError,
+  );
+  assert.equal(service.queue.size, 0);
+
+  await service.createLecture({
+    institutionId: "inst-a",
+    courseId: "course-cs101",
+    lectureId: "lec-no-consent",
+    mediaRef: "media://x",
+    captureSource: "upload",
+    consent: { noticeShown: false }, // all-party tenant, no notice → compliance gate blocks
+  });
+  await assert.rejects(
+    () => service.enqueueProcessLecture("inst-a", "lec-no-consent"),
+    ComplianceError,
+  );
+  assert.equal(service.queue.size, 0);
+  assert.equal((await repo.getLecture("inst-a", "lec-no-consent"))?.status, "created");
 });
 
 test("reprocessing an already-processed lecture raises ConflictError instead of corrupting its status", async () => {
@@ -181,9 +232,24 @@ test("data persists to disk across repository reopen", async () => {
 
     const repo2 = new SqliteRepository(file);
     assert.equal((await repo2.getLecture("inst-a", "lec-1"))?.status, "processed");
-    assert.equal((await repo2.listAssets("inst-a", "lec-1")).length, 3);
+    assert.equal((await repo2.listAssets("inst-a", "lec-1")).length, 4);
     await repo2.close();
   } finally {
     rmSync(file, { force: true });
   }
+});
+
+test("a lecture id already used by another organisation is a ConflictError, not a raw DB error", async () => {
+  const { service } = await svc();
+  await service.seedInstitution({ ...INST, id: "inst-b" }, { ...COURSE, id: "course-b", institutionId: "inst-b" });
+  const input = { institutionId: "inst-a", courseId: "course-cs101", lectureId: "shared-id", mediaRef: "media://x", captureSource: "upload", consent: { noticeShown: true } };
+  await service.createLecture(input);
+  await assert.rejects(() => service.createLecture({ ...input, institutionId: "inst-b", courseId: "course-b" }), ConflictError);
+});
+
+test("missing lectures and assets raise NotFoundError", async () => {
+  const { service } = await svc();
+  await assert.rejects(() => service.processLecture("inst-a", "nope"), NotFoundError);
+  await assert.rejects(() => service.deleteLecture("inst-a", "nope", { id: "f", role: "faculty" }), NotFoundError);
+  await assert.rejects(() => service.approveAsset("inst-a", "nope:notes:0", { id: "f", role: "faculty" }), NotFoundError);
 });

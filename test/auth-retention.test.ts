@@ -145,3 +145,13 @@ test("only admin can run retention", async () => {
     AuthorizationError,
   );
 });
+
+test("revokeUser ends a user's other sessions and keeps the one named", () => {
+  const store = new SessionStore();
+  const id = { id: "u1", name: "U", role: "student" as const, institutionId: "i" };
+  const a = store.create(id), b = store.create(id), other = store.create({ ...id, id: "u2" });
+  assert.equal(store.revokeUser("u1", a.token), 1);
+  assert.ok(store.get(a.token));
+  assert.equal(store.get(b.token), null);
+  assert.ok(store.get(other.token));
+});

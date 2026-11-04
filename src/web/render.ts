@@ -9,6 +9,7 @@ import type {
   RevisionNotes,
   Quiz,
   Flashcard,
+  ActionsAndDecisions,
   SearchHit,
 } from "../types.ts";
 import type { AuditEvent } from "../persistence/repository.ts";
@@ -121,6 +122,7 @@ export function layout(
   body: string,
   identity?: Identity | null,
   nonce = "",
+  extraHead = "",
 ): string {
   let nav = "";
   if (identity) {
@@ -132,7 +134,7 @@ export function layout(
   }
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · Lecture Intelligence</title><style nonce="${esc(nonce)}">${CSS}</style></head>
+<title>${esc(title)} · Lecture Intelligence</title><style nonce="${esc(nonce)}">${CSS}</style>${extraHead}</head>
 <body>
 <a href="#main" class="skip-link">Skip to content</a>
 <header class="top"><div class="brand">📚 Lecture Intelligence</div>${nav}</header>
@@ -172,27 +174,29 @@ export function dashboardPage(
   lectures: Lecture[],
   identity: Identity,
   nonce = "",
+  queuedId?: string,
 ): string {
   const canManage = ["faculty", "ta", "admin"].includes(identity.role);
+  const anyProcessing = lectures.some((l) => l.status === "processing");
   const rows = lectures.length
     ? lectures
         .map((l) => {
           const del = ["faculty", "ta", "admin"].includes(identity.role)
             ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/delete" style="display:inline" onsubmit="return confirm('Delete ${esc(l.id)} and all derived data?')"><button class="btn small ghost">Delete</button></form>`
             : "";
-          // "failed"/"processing" both mean the pipeline never completed
-          // (a genuine failure, or a server crash mid-run) — the only safe
-          // recovery is delete + recreate (reprocessing in place isn't
-          // allowed: see the comment on LectureService.processLecture), so
-          // point there instead of a misleading review/student link into a
-          // lecture with no valid — or no — content.
+          // "failed" means the pipeline genuinely failed; "processing" is a
+          // normal, transient state while the background job queue works
+          // through it (this page auto-refreshes). Either way, reprocessing
+          // in place isn't allowed (see LectureService.processLecture), so a
+          // stuck "processing" lecture is recovered the same way: delete +
+          // recreate.
           const actions =
             l.status === "created"
               ? (canManage
                   ? `<form method="post" action="/lectures/${encodeURIComponent(l.id)}/process" style="display:inline"><button class="btn small">Process</button></form> `
                   : "") + del
               : l.status === "failed" || l.status === "processing"
-                ? `<span class="kpi">${l.status === "failed" ? "Processing failed." : "Still processing — if this persists, the run likely crashed."} ${canManage ? "Delete and create it again to retry." : "Ask faculty to retry."}</span> ${del}`
+                ? `<span class="kpi">${l.status === "failed" ? "Processing failed. Delete and create it again to retry." : "Processing in the background — this page refreshes automatically."}</span> ${del}`
                 : `${canManage ? `<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/review">Faculty review</a> ` : ""}<a class="btn small ghost" href="/lectures/${encodeURIComponent(l.id)}/student">Student view</a> ${del}`;
           return `<div class="card"><div class="row">
         <div><strong>${esc(l.id)}</strong> <span class="chip">${esc(l.captureSource)}</span>
@@ -201,12 +205,20 @@ export function dashboardPage(
         })
         .join("")
     : `<p class="muted">No lectures yet.${canManage ? " Create one below." : ""}</p>`;
+  const queuedNotice = queuedId
+    ? `<div class="notice ok">Processing started for ${esc(queuedId)} — it's running in the background, this page refreshes automatically.</div>`
+    : "";
 
+  const captureLive = config.integrations.capture !== "mock";
   const importCard = canManage
     ? `<div class="card"><div class="row"><div>
-        <strong>Import from capture system</strong>
-        <div class="kpi">Pull existing recordings from Echo360/Panopto (moat #4). Demo uses a mock source.</div></div>
-        <form method="post" action="/import"><button class="btn small">Import from Echo360 (demo)</button></form></div></div>`
+        <strong>Import from ${captureLive ? esc(config.integrations.capture) : "capture system"}</strong>
+        <div class="kpi">${
+          captureLive
+            ? `Pulls real recordings in via the live "${esc(config.integrations.capture)}" connector (moat #4).`
+            : "Pull existing recordings from Echo360/Panopto/Zoom (moat #4). Demo uses a mock source — set CAPTURE_SOURCE to pull real ones."
+        }</div></div>
+        <form method="post" action="/import"><button class="btn small">Import${captureLive ? ` from ${esc(config.integrations.capture)}` : " from Echo360 (demo)"}</button></form></div></div>`
     : "";
 
   const createCard = canManage
@@ -234,11 +246,13 @@ export function dashboardPage(
     "Dashboard",
     `<h1>${esc(courseTitle)}</h1>
      <p class="sub">Turn in-person lecture recordings into study-ready, searchable knowledge.</p>
+     ${queuedNotice}
      ${rows}
      ${importCard}
      ${createCard}`,
     identity,
     nonce,
+    anyProcessing ? '<meta http-equiv="refresh" content="4">' : "",
   );
 }
 
@@ -300,11 +314,36 @@ function renderQuiz(q: Quiz): string {
     .join("");
 }
 
+function renderActions(a: ActionsAndDecisions): string {
+  const decisions = a.decisions.length
+    ? a.decisions
+        .map(
+          (d) =>
+            `<div class="point ${d.flagged ? "flagged" : ""}">${esc(d.text)}
+             <span class="cite">[${d.sourceRefs.map(esc).join(", ")}]</span>${groundingBadge(d.confidence, d.flagged)}</div>`,
+        )
+        .join("")
+    : `<p class="kpi">No decisions were recorded.</p>`;
+  const items = a.actionItems.length
+    ? a.actionItems
+        .map(
+          (it) =>
+            `<div class="point ${it.statement.flagged ? "flagged" : ""}">${esc(it.statement.text)}
+             <span class="chip" style="margin-left:6px">${esc(it.owner ?? "Unassigned")}</span>
+             <span class="cite">[${it.statement.sourceRefs.map(esc).join(", ")}]</span>${groundingBadge(it.statement.confidence, it.statement.flagged)}</div>`,
+        )
+        .join("")
+    : `<p class="kpi">No action items were recorded.</p>`;
+  return `<div class="card"><strong>Decisions</strong>${decisions}</div>
+    <div class="card"><strong>Action items</strong>${items}</div>`;
+}
+
 function assetBlock(a: StoredAsset, showApprove: boolean): string {
   let inner = "";
   if (a.type === "notes") inner = renderNotes(a.content as RevisionNotes);
   else if (a.type === "flashcards") inner = renderFlashcards((a.content as { cards: Flashcard[] }).cards);
-  else inner = renderQuiz(a.content as Quiz);
+  else if (a.type === "quiz") inner = renderQuiz(a.content as Quiz);
+  else inner = renderActions(a.content as ActionsAndDecisions);
 
   const approve =
     showApprove && a.status !== "approved"
@@ -332,9 +371,14 @@ export function reviewPage(
   nonce = "",
 ): string {
   const approvedCount = assets.filter((a) => a.status === "approved").length;
+  const lmsLive = config.integrations.lms !== "mock";
   const publishBar = `<div class="card"><div class="row"><div>
-      <strong>Publish to LMS</strong>
-      <div class="kpi">Pushes ${approvedCount} approved asset(s) into Canvas/Moodle (moat #4). Demo uses a mock connector.</div></div>
+      <strong>Publish${lmsLive ? ` via ${esc(config.integrations.lms)}` : " to LMS"}</strong>
+      <div class="kpi">${
+        lmsLive
+          ? `Pushes ${approvedCount} approved asset(s) out through the live "${esc(config.integrations.lms)}" connector — this leaves the app for real.`
+          : `Pushes ${approvedCount} approved asset(s) to a demo LMS connector (moat #4). Demo uses a mock connector — set LMS_CONNECTOR to push for real.`
+      }</div></div>
       <form method="post" action="/lectures/${encodeURIComponent(lecture.id)}/publish"><button class="btn small" ${approvedCount ? "" : "disabled"}>Publish approved</button></form></div></div>`;
   return layout(
     "Faculty review",
@@ -429,9 +473,12 @@ export function studentPage(
       } else if (a.type === "flashcards") {
         inner = renderFlashcardsStudent((a.content as { cards: Flashcard[] }).cards);
         ex = `<a class="btn small ghost" href="${base}/flashcards.csv">Export Anki .csv</a>`;
-      } else {
+      } else if (a.type === "quiz") {
         inner = renderQuizStudent(a.content as Quiz);
         ex = `<a class="btn small ghost" href="${base}/quiz.md">Export .md</a>`;
+      } else {
+        inner = renderActions(a.content as ActionsAndDecisions);
+        ex = `<a class="btn small ghost" href="${base}/actions.md">Export .md</a>`;
       }
       return `<section><div class="row"><h2>${esc(a.type)}</h2>${ex}</div>${inner}</section>`;
     })
@@ -498,8 +545,8 @@ export function auditPage(
        <strong>Data retention</strong>
        <div class="kpi">Tenant policy: delete lectures older than ${retentionDays} days.</div></div>
        <form method="post" action="/admin/retention"><button class="btn small">Run retention now</button></form></div></div>
-     <div class="card"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
-     <tbody>${rows || '<tr><td colspan="4" class="muted">No events yet.</td></tr>'}</tbody></table></div>`,
+     <div class="card"><div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
+     <tbody>${rows || '<tr><td colspan="4" class="muted">No events yet.</td></tr>'}</tbody></table></div></div>`,
     identity,
     nonce,
   );

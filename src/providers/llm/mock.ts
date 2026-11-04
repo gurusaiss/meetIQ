@@ -5,6 +5,7 @@ import type {
   NotesDraft,
   FlashcardsDraft,
   QuizDraft,
+  ActionsDraft,
 } from "./types.ts";
 
 /**
@@ -111,7 +112,36 @@ export class MockLLMProvider implements LLMProvider {
     });
     return { questions };
   }
+
+  async extractActions(t: Transcript, topics: TopicSegment[]): Promise<ActionsDraft> {
+    const byId = index(t);
+    const decisions: ActionsDraft["decisions"] = [];
+    const actionItems: ActionsDraft["actionItems"] = [];
+
+    for (const topic of topics) {
+      const segs = topic.segmentIds
+        .map((id) => byId.get(id))
+        .filter((s): s is NonNullable<typeof s> => Boolean(s));
+      if (segs.length === 0) continue;
+
+      // Prefer a sentence that reads like a decision/commitment; fall back to
+      // the topic's closing and opening segment so every topic still yields
+      // one of each, deterministically, with real confidence attached.
+      const decisionSeg = segs.find((s) => DECISION_RE.test(s.text)) ?? segs[segs.length - 1]!;
+      const actionSeg = segs.find((s) => ACTION_RE.test(s.text)) ?? segs[0]!;
+
+      decisions.push({ text: `Decided: ${bullet(decisionSeg.text)}`, sourceRefs: [decisionSeg.id] });
+      actionItems.push({
+        owner: actionSeg.speaker,
+        statement: { text: `Follow up: ${bullet(actionSeg.text)}`, sourceRefs: [actionSeg.id] },
+      });
+    }
+    return { decisions, actionItems };
+  }
 }
+
+const DECISION_RE = /\b(agreed|decided|will go with|approved|concluded|finalized)\b/i;
+const ACTION_RE = /\b(will|needs? to|going to|should|must|follow up|action item)\b/i;
 
 // ── helpers ─────────────────────────────────────────────────────────
 function index(t: Transcript) {

@@ -4,6 +4,8 @@ import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { slidesFromNotes } from "../../../../lib/slides.ts";
 import type { RevisionNotes } from "../../../../../src/types.ts";
 
+export const metadata = { title: "Slides · MeetIQ" };
+
 export default async function SlidesPage({ params }: { params: Promise<{ id: string }> }) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");

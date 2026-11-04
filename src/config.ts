@@ -44,6 +44,24 @@ export const config = {
     databaseUrl: str("DATABASE_URL", ""),
     vectorDim: num("EMBEDDING_VECTOR_DIM", 256),
   },
+  queue: {
+    /** How many lectures the background job queue processes at once. */
+    concurrency: num("QUEUE_CONCURRENCY", 2),
+  },
+  integrations: {
+    /** capture: mock | zoom | echo360 | panopto | kaltura (the latter three are tested stubs, pending institutional credentials). */
+    capture: str("CAPTURE_SOURCE", "mock"),
+    /** lms: mock | slack | canvas | moodle | blackboard (the latter three are tested stubs, pending LTI/API credentials). */
+    lms: str("LMS_CONNECTOR", "mock"),
+    zoom: {
+      accountId: str("ZOOM_ACCOUNT_ID", ""),
+      clientId: str("ZOOM_CLIENT_ID", ""),
+      clientSecret: str("ZOOM_CLIENT_SECRET", ""),
+    },
+    slack: {
+      webhookUrl: str("SLACK_WEBHOOK_URL", ""),
+    },
+  },
   security: {
     /**
      * `X-Forwarded-For` is client-suppliable and only trustworthy behind a
@@ -64,10 +82,11 @@ export const config = {
     secureCookies: bool("COOKIE_SECURE", process.env.NODE_ENV === "production"),
     /**
      * The one-click "Quick demo" sign-in (pick a role, no password) into a
-     * shared sample organisation. On by default so a fresh deploy can be shown
-     * immediately; set DEMO_LOGIN=0 for a deployment that holds real data.
+     * shared sample organisation. Everyone who uses it shares one organisation,
+     * including its admin role, so it is OFF by default in production; set
+     * DEMO_LOGIN=1 to enable it for a showcase deploy.
      */
-    demoLogin: bool("DEMO_LOGIN", true),
+    demoLogin: bool("DEMO_LOGIN", process.env.NODE_ENV !== "production"),
   },
 } as const;
 
@@ -78,6 +97,8 @@ const VALID = {
   llm: ["mock", "anthropic", "groq"],
   embeddings: ["mock", "local"],
   repository: ["sqlite", "postgres"],
+  capture: ["mock", "zoom", "echo360", "panopto", "kaltura"],
+  lms: ["mock", "slack", "canvas", "moodle", "blackboard"],
 };
 
 /**
@@ -95,10 +116,15 @@ export function validateConfig(c: Config = config): string[] {
     errors.push(`EMBEDDINGS_PROVIDER "${c.providers.embeddings}" is not one of ${VALID.embeddings.join(", ")}`);
   if (!VALID.repository.includes(c.repository.driver))
     errors.push(`REPO_DRIVER "${c.repository.driver}" is not one of ${VALID.repository.join(", ")}`);
+  if (!VALID.capture.includes(c.integrations.capture))
+    errors.push(`CAPTURE_SOURCE "${c.integrations.capture}" is not one of ${VALID.capture.join(", ")}`);
+  if (!VALID.lms.includes(c.integrations.lms))
+    errors.push(`LMS_CONNECTOR "${c.integrations.lms}" is not one of ${VALID.lms.join(", ")}`);
 
   const { confidenceFlagThreshold: t, assetAutoHoldFlagRatio: r } = c.quality;
   if (!(t >= 0 && t <= 1)) errors.push(`CONFIDENCE_FLAG_THRESHOLD must be in [0,1], got ${t}`);
   if (!(r >= 0 && r <= 1)) errors.push(`ASSET_AUTOHOLD_FLAG_RATIO must be in [0,1], got ${r}`);
+  if (!(c.queue.concurrency >= 1)) errors.push(`QUEUE_CONCURRENCY must be >= 1, got ${c.queue.concurrency}`);
 
   // Selected real providers/adapters must have their key/connection present.
   if (c.providers.transcription === "assemblyai" && !c.keys.assemblyai)
@@ -111,6 +137,13 @@ export function validateConfig(c: Config = config): string[] {
     errors.push("LLM_PROVIDER=groq but GROQ_API_KEY is empty");
   if (c.repository.driver === "postgres" && !c.repository.databaseUrl)
     errors.push("REPO_DRIVER=postgres but DATABASE_URL is empty");
+  if (
+    c.integrations.capture === "zoom" &&
+    !(c.integrations.zoom.accountId && c.integrations.zoom.clientId && c.integrations.zoom.clientSecret)
+  )
+    errors.push("CAPTURE_SOURCE=zoom but ZOOM_ACCOUNT_ID/ZOOM_CLIENT_ID/ZOOM_CLIENT_SECRET are not all set");
+  if (c.integrations.lms === "slack" && !c.integrations.slack.webhookUrl)
+    errors.push("LMS_CONNECTOR=slack but SLACK_WEBHOOK_URL is empty");
 
   return errors;
 }

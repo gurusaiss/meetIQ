@@ -214,7 +214,7 @@ maybeTest("LectureService against PostgresRepository: full lifecycle parity", as
       consent: { noticeShown: true },
     });
     const assets = await service.processLecture("inst-pg", "lec-2", { diarize: true });
-    assert.equal(assets.length, 3);
+    assert.equal(assets.length, 4);
 
     await assert.rejects(
       () => service.approveAsset("inst-pg", assets[0]!.id, { id: "sam", role: "student" }),

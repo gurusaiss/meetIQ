@@ -32,6 +32,11 @@ export interface QuizDraft {
   }>;
 }
 
+export interface ActionsDraft {
+  decisions: StatementDraft[];
+  actionItems: Array<{ owner: string | null; statement: StatementDraft }>;
+}
+
 /**
  * Domain-aware LLM contract. Mock implements deterministically; real
  * implementations build prompts + parse JSON. Cost tiering (cheap model
@@ -43,4 +48,5 @@ export interface LLMProvider {
   writeNotes(t: Transcript, topics: TopicSegment[]): Promise<NotesDraft>;
   makeFlashcards(t: Transcript, topics: TopicSegment[]): Promise<FlashcardsDraft>;
   makeQuiz(t: Transcript, topics: TopicSegment[]): Promise<QuizDraft>;
+  extractActions(t: Transcript, topics: TopicSegment[]): Promise<ActionsDraft>;
 }

@@ -130,7 +130,7 @@ seconds); every request after is fast.
 ### Tests
 
 ```bash
-npm test               # pipeline + persistence + gates + isolation (61 tests)
+npm test               # pipeline + persistence + gates + isolation + queue + integrations (103 tests)
 npm run typecheck
 cd web && npm test      # builds the Next app + drives the full HTTP journey
 ```
@@ -150,6 +150,8 @@ src/
     llm/                     mock | anthropic | groq
     embeddings/              mock | local
   persistence/               Repository port: sqlite | postgres+pgvector adapters
+  queue/                     JobQueue port: in-memory default, swappable backend
+  integrations/              capture.ts (mock|zoom|echo360|panopto|kaltura), lms.ts (mock|slack|canvas|moodle|blackboard)
   services/lecture-service.ts  compliance gate + approval gate + audit, enforced
 web/                        Next.js 16 App Router presentation layer
 test/                       node:test suite
@@ -180,18 +182,40 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
   read-only auditor), change-your-own-password, and admin-issued one-time
   temporary passwords (no email service needed). See [`DEMO.md`](DEMO.md). The zero-dependency server
   keeps its simple demo login.
+- **Installable PWA** (Next.js app): web manifest, generated icons
+  (`web/scripts/make-icons.mjs`), an "Install app" button, and a service worker
+  that caches only static build assets and an offline page. Pages, API
+  responses and transcripts are never cached, by design.
 - **Production hardening**: structured logging, health probes, session
   expiry + login rate limiting, strict CSP, secure cookies, graceful
-  shutdown, and a handful of real bugs found by actually exercising the app
-  end-to-end rather than just reading the code (documented candidly in
-  `docs/DECISIONS.md` rather than swept under the rug).
+  shutdown (now draining the job queue before exit), and a handful of real
+  bugs found by actually exercising the app end-to-end rather than just
+  reading the code (documented candidly in `docs/DECISIONS.md` rather than
+  swept under the rug).
+- **Background job queue**: processing a recording (transcription + several
+  LLM calls) no longer runs inline inside the HTTP request. `POST
+  /lectures/:id/process` validates (status, consent) synchronously, flips
+  the lecture to `processing`, and returns immediately — the pipeline itself
+  runs on an in-process, bounded-concurrency queue (`src/queue/job-queue.ts`,
+  `QUEUE_CONCURRENCY`), the same swappable-port pattern as every provider and
+  the `Repository`. The dashboard shows `processing` as a normal transient
+  state and polls itself until the job lands on `processed`/`failed`.
+- **Real capture-system / LMS integrations** (moat #4): `CAPTURE_SOURCE=zoom`
+  pulls real Zoom Cloud Recordings in — Server-to-Server OAuth, token
+  caching, mapped to the same `ExternalRecording` shape Echo360/Panopto use
+  (those three remain tested stubs pending institutional credentials).
+  `LMS_CONNECTOR=slack` pushes approved notes/flashcards/quiz/decisions back
+  out via an Incoming Webhook — the natural distribution target for a
+  company/team, which doesn't have an LMS the way a university does
+  (Canvas/Moodle/Blackboard remain tested stubs). Both default to `mock` so
+  the import/publish flow is fully testable with zero credentials; see
+  `src/integrations/capture.ts` and `src/integrations/lms.ts`.
 
 ## Roadmap
 
 Not built yet, and why: email-based verification and self-service reset
-(needs a mail provider); a real async job queue (the pipeline currently runs
-inline within one HTTP request — fine for Groq's fast inference, but a
-genuine production system would decouple this with a worker + queue so a
-slow provider can't hold a request open); real capture-system/LMS
-integrations (Echo360/Canvas/etc. adapters exist as tested mocks with real
-adapters stubbed to fail clearly, pending real institutional credentials).
+(needs a mail provider); the university/legal-specific capture and LMS
+adapters (Echo360, Panopto, Kaltura, Canvas, Moodle, Blackboard) — real,
+working adapters now exist for the company-priority pair (Zoom capture +
+Slack publish, see above); the rest are tested stubs pending institutional
+API/LTI credentials, same shape, just not built yet.

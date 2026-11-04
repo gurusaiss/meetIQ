@@ -3,6 +3,8 @@ import { forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
 import { NewInputForm } from "../../components/NewInputForm.tsx";
 
+export const metadata = { title: "New session · MeetIQ" };
+
 const MODES = ["record", "upload", "text", "file"] as const;
 
 export default async function NewInputPage({

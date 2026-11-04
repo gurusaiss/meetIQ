@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   // imports (rewriteRelativeImportExtensions convention). Next's bundler
   // resolves an already-extensioned specifier as a literal path match, so
   // these files are reused completely unchanged — no duplication, no port.
+  poweredByHeader: false,
   serverExternalPackages: ["pptxgenjs"],
   outputFileTracingRoot: process.cwd() + "/..",
   experimental: {

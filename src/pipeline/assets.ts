@@ -5,6 +5,7 @@ import type {
   RevisionNotes,
   Flashcard,
   Quiz,
+  ActionsAndDecisions,
   TranscriptSegment,
 } from "../types.ts";
 import type { LLMProvider } from "../providers/llm/types.ts";
@@ -29,8 +30,9 @@ export async function buildAssets(
   const notes = await buildNotes(llm, transcript, topics, segs, th);
   const flashcards = await buildFlashcards(llm, transcript, topics, segs, th);
   const quiz = await buildQuiz(llm, transcript, topics, segs, th);
+  const actions = await buildActions(llm, transcript, topics, segs, th);
 
-  return [notes, flashcards, quiz].map((a) =>
+  return [notes, flashcards, quiz, actions].map((a) =>
     applyAutoHold(a, quality.assetAutoHoldFlagRatio),
   );
 }
@@ -109,6 +111,37 @@ async function buildQuiz(
   };
   const q = assetQuality(all);
   return { type: "quiz", status: "draft", content, ...q };
+}
+
+async function buildActions(
+  llm: LLMProvider,
+  t: Transcript,
+  topics: TopicSegment[],
+  segs: Map<string, TranscriptSegment>,
+  th: number,
+): Promise<KnowledgeAsset> {
+  const draft = await llm.extractActions(t, topics);
+  const all: Array<{ flagged: boolean; ungrounded: boolean }> = [];
+
+  const decisions = draft.decisions
+    .map((d) => ground(d, segs, th))
+    .filter((d) => {
+      all.push(d);
+      return !d.ungrounded;
+    })
+    .map(strip);
+
+  const actionItems = draft.actionItems
+    .map((a) => ({ owner: a.owner, statement: ground(a.statement, segs, th) }))
+    .filter((a) => {
+      all.push(a.statement);
+      return !a.statement.ungrounded;
+    })
+    .map((a) => ({ owner: a.owner, statement: strip(a.statement) }));
+
+  const content: ActionsAndDecisions = { decisions, actionItems };
+  const q = assetQuality(all);
+  return { type: "actions", status: "draft", content, ...q };
 }
 
 function applyAutoHold(a: KnowledgeAsset, ratio: number): KnowledgeAsset {

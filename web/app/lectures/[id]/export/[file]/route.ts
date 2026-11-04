@@ -5,8 +5,9 @@ import {
   notesToMarkdown,
   flashcardsToAnkiCsv,
   quizToMarkdown,
+  actionsToMarkdown,
 } from "../../../../../../src/export/exporters.ts";
-import type { RevisionNotes, Quiz, Flashcard } from "../../../../../../src/types.ts";
+import type { RevisionNotes, Quiz, Flashcard, ActionsAndDecisions } from "../../../../../../src/types.ts";
 import { htmlError } from "../../../../../lib/http.ts";
 import { slidesFromNotes } from "../../../../../lib/slides.ts";
 import { buildPptx } from "../../../../../lib/pptx.ts";
@@ -47,6 +48,15 @@ export async function GET(
     const a = approved.find((x) => x.type === "quiz");
     if (!a) return htmlError(404, "<h1>Quiz not released yet</h1>");
     return download(quizToMarkdown(lectureId, a.content as Quiz), "text/markdown", `${lectureId}-quiz.md`);
+  }
+  if (file === "actions.md") {
+    const a = approved.find((x) => x.type === "actions");
+    if (!a) return htmlError(404, "<h1>Decisions & action items not released yet</h1>");
+    return download(
+      actionsToMarkdown(lectureId, a.content as ActionsAndDecisions),
+      "text/markdown",
+      `${lectureId}-actions.md`,
+    );
   }
   if (file === "slides.pptx") {
     const a = approved.find((x) => x.type === "notes");

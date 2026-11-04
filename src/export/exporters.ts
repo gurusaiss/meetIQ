@@ -3,7 +3,7 @@
  * students actually use (SHOULD-tier in Phase 5). Kept dependency-free and
  * pure so they are trivially unit-tested and reused by any delivery surface.
  */
-import type { RevisionNotes, Flashcard, Quiz } from "../types.ts";
+import type { RevisionNotes, Flashcard, Quiz, ActionsAndDecisions } from "../types.ts";
 
 function mmss(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -50,5 +50,26 @@ export function quizToMarkdown(lectureId: string, quiz: Quiz): string {
       `${i + 1}. **${String.fromCharCode(65 + qq.answerIndex)}** — ${qq.explanation.text}`,
     );
   });
+  return lines.join("\n") + "\n";
+}
+
+/** Decisions & action items → Markdown, grouped and cited (minutes-style). */
+export function actionsToMarkdown(lectureId: string, actions: ActionsAndDecisions): string {
+  const lines: string[] = [`# ${lectureId} — Decisions & Action Items`, ""];
+  lines.push("## Decisions", "");
+  if (actions.decisions.length === 0) lines.push("_No decisions recorded._", "");
+  for (const d of actions.decisions) {
+    const cite = d.sourceRefs.length ? ` _(cite: ${d.sourceRefs.join(", ")})_` : "";
+    const flag = d.flagged ? " ⚠️ _low-confidence — verify_" : "";
+    lines.push(`- ${d.text}${cite}${flag}`);
+  }
+  lines.push("", "## Action items", "");
+  if (actions.actionItems.length === 0) lines.push("_No action items recorded._", "");
+  for (const a of actions.actionItems) {
+    const owner = a.owner ? ` — **${a.owner}**` : " — _unassigned_";
+    const cite = a.statement.sourceRefs.length ? ` _(cite: ${a.statement.sourceRefs.join(", ")})_` : "";
+    const flag = a.statement.flagged ? " ⚠️ _low-confidence — verify_" : "";
+    lines.push(`- [ ] ${a.statement.text}${owner}${cite}${flag}`);
+  }
   return lines.join("\n") + "\n";
 }

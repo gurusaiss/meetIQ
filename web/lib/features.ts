@@ -22,6 +22,7 @@ export const TOOL_TILES: Tile[] = [
   { key: "quiz", title: "Quiz", desc: "Self-grading multiple choice with explanations." },
   { key: "flowchart", title: "Flowchart", desc: "The session as a step-by-step topic flow." },
   { key: "slides", title: "PPT slides", desc: "Download a PowerPoint deck of the verified notes." },
+  { key: "actions", title: "Decisions & action items", desc: "Who owns what, cited to the exact moment it was agreed." },
   { key: "search", title: "Search", desc: "Ask questions across every input, with timestamps." },
 ];
 
@@ -84,6 +85,7 @@ export function toolHref(tool: string, lectureId: string, canManage: boolean): s
     case "notes":
     case "flashcards":
     case "quiz":
+    case "actions":
       return canManage ? `/lectures/${id}/review#${tool}` : `/lectures/${id}/student#${tool}`;
     case "flowchart":
       return `/lectures/${id}/flowchart`;

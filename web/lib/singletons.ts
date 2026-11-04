@@ -33,7 +33,8 @@ import { createRepository, type Repository } from "../../src/persistence/index.t
 import { LectureService } from "../../src/services/lecture-service.ts";
 import { SessionStore, RateLimiter } from "../../src/auth/session.ts";
 import { AccountService } from "../../src/auth/accounts.ts";
-import { MockLmsConnector } from "../../src/integrations/lms.ts";
+import { getLmsConnector, type LmsConnector } from "../../src/integrations/lms.ts";
+import { getCaptureSource, type CaptureSource } from "../../src/integrations/capture.ts";
 
 /** The shared sample organisation behind the "Quick demo" sign-in. */
 export const DEMO_INSTITUTION_ID = "inst-a";
@@ -48,7 +49,8 @@ interface Globals {
   __lipSessions?: SessionStore;
   __lipLoginLimiter?: RateLimiter;
   __lipEmailLimiter?: RateLimiter;
-  __lipLms?: MockLmsConnector;
+  __lipLms?: LmsConnector;
+  __lipCapture?: CaptureSource;
   __lipSeedPromise?: Promise<void>;
 }
 const g = globalThis as unknown as Globals;
@@ -81,7 +83,9 @@ function build(): void {
   // (getEmailLimiter): tight, which is what actually stops password guessing.
   g.__lipLoginLimiter = new RateLimiter(60, 60_000);
   g.__lipEmailLimiter = new RateLimiter(10, 60_000);
-  g.__lipLms = new MockLmsConnector();
+  g.__lipLms = getLmsConnector(config.integrations.lms, config.integrations.slack);
+  g.__lipCapture = getCaptureSource(config.integrations.capture, config.integrations.zoom);
+  logger.info("integrations.selected", { capture: config.integrations.capture, lms: config.integrations.lms });
 }
 
 async function seed(): Promise<void> {
@@ -134,6 +138,9 @@ export function getLoginLimiter(): RateLimiter {
 export function getEmailLimiter(): RateLimiter {
   return g.__lipEmailLimiter!;
 }
-export function getLms(): MockLmsConnector {
+export function getLms(): LmsConnector {
   return g.__lipLms!;
+}
+export function getCapture(): CaptureSource {
+  return g.__lipCapture!;
 }

@@ -3,6 +3,8 @@ import { getIdentity } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
+export const metadata = { title: "Notes · MeetIQ" };
+
 export default async function StudentPage({ params }: { params: Promise<{ id: string }> }) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
@@ -17,11 +19,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     notes: `${base}/notes.md`,
     flashcards: `${base}/flashcards.csv`,
     quiz: `${base}/quiz.md`,
+    actions: `${base}/actions.md`,
   };
   const exportLabel: Record<string, string> = {
     notes: "Export .md",
     flashcards: "Export Anki .csv",
     quiz: "Export .md",
+    actions: "Export .md",
   };
 
   return (

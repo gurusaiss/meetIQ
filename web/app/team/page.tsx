@@ -43,6 +43,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             Nobody has an account here yet. (The shared demo organisation uses quick demo sign-in, not accounts.)
           </p>
         ) : (
+          <div className="table-wrap">
           <table>
             <thead>
               <tr>
@@ -74,6 +75,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </>

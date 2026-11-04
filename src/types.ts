@@ -81,6 +81,18 @@ export interface Quiz {
   questions: QuizQuestion[];
 }
 
+/** A commitment to do something, optionally attributed to a speaker. */
+export interface ActionItem {
+  /** Best-guess owner named in the transcript; not independently verifiable, so never grounding-gated on its own. */
+  owner: string | null;
+  statement: GroundedStatement;
+}
+
+export interface ActionsAndDecisions {
+  decisions: GroundedStatement[];
+  actionItems: ActionItem[];
+}
+
 /** RAG chunk with its embedding. */
 export interface Chunk {
   id: string;
@@ -96,13 +108,13 @@ export interface SearchHit {
   score: number;
 }
 
-export type AssetType = "notes" | "flashcards" | "quiz";
+export type AssetType = "notes" | "flashcards" | "quiz" | "actions";
 export type AssetStatus = "draft" | "auto_held" | "approved";
 
 export interface KnowledgeAsset {
   type: AssetType;
   status: AssetStatus;
-  content: RevisionNotes | { cards: Flashcard[] } | Quiz;
+  content: RevisionNotes | { cards: Flashcard[] } | Quiz | ActionsAndDecisions;
   /** fraction of statements flagged as low-confidence */
   flagRatio: number;
   /** fraction of statements with zero grounding (should be ~0) */

@@ -2,6 +2,8 @@ import { redirect, forbidden } from "next/navigation";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
 import { getRepo } from "../../lib/singletons.ts";
 
+export const metadata = { title: "Audit trail · MeetIQ" };
+
 export default async function AuditPage() {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
@@ -35,6 +37,7 @@ export default async function AuditPage() {
         </div>
       </div>
       <div className="card">
+        <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -63,6 +66,7 @@ export default async function AuditPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );
