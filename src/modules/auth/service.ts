@@ -273,30 +273,6 @@ export async function loginWithPhonePin(
   });
 }
 
-export type LoginMethod =
-  | { kind: 'email'; email: string }
-  | { kind: 'phone'; phone: string }
-  | { kind: 'none' };
-
-/** Which credential this account signs in with, so the dashboard can offer the matching "change" screen. */
-export async function getLoginMethod(userId: string): Promise<LoginMethod> {
-  return withSystem(async ({ tx }) => {
-    const [user] = await tx
-      .select({
-        email: schema.users.email,
-        passwordHash: schema.users.passwordHash,
-        phone: schema.users.phone,
-        pinHash: schema.users.pinHash,
-      })
-      .from(schema.users)
-      .where(eq(schema.users.id, userId))
-      .limit(1);
-    if (user?.email && user.passwordHash) return { kind: 'email', email: user.email };
-    if (user?.phone && user.pinHash) return { kind: 'phone', phone: user.phone };
-    return { kind: 'none' };
-  });
-}
-
 /** Lets a merchant change their own phone-login PIN (distinct from a platform admin's). */
 export async function setMerchantPin(userId: string, pin: string): Promise<void> {
   if (!/^\d{6}$/.test(pin)) throw new AuthError('PIN must be exactly 6 digits.');

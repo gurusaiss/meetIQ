@@ -116,26 +116,6 @@ consistent with the architecture's general bias against host lock-in.
   categories/plans/feature-flags (`admin/settings`), and the audit log
   (`admin/audit`). See the git log entry "Wire up every permission that had
   no UI" for the full list and the two real bugs this surfaced.
-- **Member self-service credential change is now built** (`app/app/account`):
-  `setPassword()`/`setMerchantPin()` existed but had no dashboard screen; a
-  merchant now sees "Change password" or "Change PIN" depending on which
-  credential their own account actually uses (`getLoginMethod()`), never both.
-- **Menu categories are now built** (`app/app/catalog` → `app/app/catalog/category/[groupId]`):
-  the `catalog_groups` table existed since the very first migration with no
-  application code reading or writing it. Items can now be grouped under an
-  optional category, shown as an image-box tile on the dashboard and as a
-  named sub-list on the public page; ungrouped items work exactly as before.
-- **Dependency security patches**: `next` (16.3.5 → 16.4.2, fixes a critical
-  RCE in `next/og` `ImageResponse` — used by this app's generated favicon,
-  `app/icon.tsx`), `sharp` (0.34 → 0.35, fixes several high-severity libvips/
-  libheif/librsvg CVEs — sharp processes every merchant photo upload), and
-  `drizzle-orm` (0.44 → 0.45, fixes a high-severity SQL-identifier-escaping
-  issue). `npm audit` still reports issues in `vitest`/`tinypool` (dev-only
-  test runner), `drizzle-kit`'s bundled `esbuild` (dev-only CLI, never
-  deployed), and `mammoth`/`exceljs`'s own unmaintained `argparse`/`uuid`
-  pins (upstream hasn't moved these; not reachable through how this app
-  calls either library) — left as-is rather than forcing a downgrade `npm
-  audit fix --force` would otherwise apply.
 
 ## Architectural limitations, by design (not bugs)
 
@@ -168,6 +148,10 @@ consistent with the architecture's general bias against host lock-in.
   services for the newer admin screens (members, plan/usage queries) have
   tests; the settings/audit/merchant-detail screens themselves were verified
   by manual click-through, build success and typechecking, not component tests.
+- **No member self-service password change UI.** `setPassword()` exists and
+  is used for platform-admin bootstrapping; a merchant using password login
+  (rather than phone-OTP, which needs no password) has no dashboard screen to
+  change their own password yet.
 
 ## Explicitly out of scope for this pass (per the plan itself)
 

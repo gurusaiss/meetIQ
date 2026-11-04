@@ -36,16 +36,6 @@ function IconCard({ className = 'h-5 w-5' }: IconProps) {
   );
 }
 
-function IconLock({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
-      <rect x="4" y="9" width="12" height="8" rx="1.8" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="10" cy="13" r="1.2" fill="currentColor" />
-    </svg>
-  );
-}
-
 function IconSparkle({ className = 'h-5 w-5' }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
@@ -91,7 +81,6 @@ export default async function MorePage() {
         {can(principal, 'ai:configure') && <MenuRow href="/app/ai" icon={<IconSparkle />} label="AI assistant" />}
         {can(principal, 'members:read') && <MenuRow href="/app/team" icon={<IconUsers />} label="Team" />}
         {can(principal, 'billing:read') && <MenuRow href="/app/plan" icon={<IconCard />} label="Plan & billing" />}
-        <MenuRow href="/app/account" icon={<IconLock />} label="Account & security" />
       </div>
 
       <form action={logoutAction} className="mt-6">

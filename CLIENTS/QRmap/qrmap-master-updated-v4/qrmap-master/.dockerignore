@@ -1,8 +1,0 @@
-node_modules
-.next
-.git
-uploads-dev
-coverage
-*.log
-.env
-.env.local

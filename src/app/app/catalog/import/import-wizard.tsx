@@ -9,11 +9,10 @@ const initial: ImportFormState = {};
 
 type Row = DraftRow & { include: boolean };
 
-export function ImportWizard({ groups = [] }: { groups?: { id: string; name: string }[] }) {
+export function ImportWizard() {
   const [state, action, parsing] = useActionState(parseImportAction, initial);
   const [kind, setKind] = useState<'service' | 'product'>('service');
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [groupId, setGroupId] = useState('');
   const [confirmPending, startConfirm] = useTransition();
   const [confirmResult, setConfirmResult] = useState<{ error?: string; success?: string }>({});
 
@@ -92,19 +91,6 @@ export function ImportWizard({ groups = [] }: { groups?: { id: string; name: str
             </p>
           </Card>
 
-          {groups.length > 0 && (
-            <Field label="Add all of these to a category" hint="Optional">
-              <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                <option value="">No category</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-
           <div className="space-y-2">
             {rows.map((row, i) => (
               <Card key={i} className={`p-3 ${row.include ? '' : 'opacity-50'}`}>
@@ -159,7 +145,7 @@ export function ImportWizard({ groups = [] }: { groups?: { id: string; name: str
               disabled={confirmPending || includedCount === 0}
               onClick={() =>
                 startConfirm(async () => {
-                  const result = await confirmImportAction(kind, rows.filter((r) => r.include), groupId || null);
+                  const result = await confirmImportAction(kind, rows.filter((r) => r.include));
                   setConfirmResult(result);
                 })
               }

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24: TypeScript type-stripping + node:sqlite work without extra
+          # flags. Node 22 needs --experimental-sqlite, so it's not in the matrix.
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: devpass
+          POSTGRES_DB: lip
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          DATABASE_URL: postgres://postgres:devpass@localhost:55432/lip
+
+  test-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      # The shared ../src code imports pg / @anthropic-ai/sdk /
+      # @huggingface/transformers; Node and tsc resolve those from the repo
+      # root, so the root install must exist too (web/Dockerfile does the same).
+      - run: npm ci
+        working-directory: .
+      - run: npm ci
+      - run: npm run typecheck
+      # Runs `next build` itself, then boots `next start` against a
+      # throwaway DB and drives the full journey over HTTP.
+      - run: npm test

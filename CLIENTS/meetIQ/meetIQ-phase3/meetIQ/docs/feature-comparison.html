@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeetIQ Feature &amp; Research Comparison</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1a1c22; --muted:#5c6270;
+  --line:#e4e2dc; --accent:#4f46e5; --accent-ink:#ffffff;
+  --ok:#0f8a4b; --ok-bg:#e7f6ee; --warn:#a35b00; --warn-bg:#fdf1de;
+  --chip:#eeecf8; --found:#ece9e2; --tblhead:#f0eee8;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+    --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+    --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+    --chip:#242a3a; --found:#1c2027; --tblhead:#1c2027; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+  --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+  --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+  --chip:#242a3a; --found:#1c2027; --tblhead:#1c2027; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.55 'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  padding:32px 16px 56px}
+h1,h2,h3{font-family:'Sora',system-ui,sans-serif;letter-spacing:-.01em;text-wrap:balance;margin:0}
+.wrap{max-width:980px;margin:0 auto}
+header{text-align:center;margin-bottom:28px}
+header h1{font-size:27px;font-weight:800}
+header p{color:var(--muted);margin:10px 0 0;font-size:14.5px;max-width:620px;margin-left:auto;margin-right:auto}
+
+section{margin-top:44px}
+.section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:16px}
+.section-head h2{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.section-head .rule{flex:1;height:1px;background:var(--line)}
+
+/* feature grid */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;min-width:0}
+.card .icon{font-size:19px;display:block;margin-bottom:6px}
+.card h3{font-size:13.5px;font-weight:700;margin-bottom:4px}
+.card p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.45}
+.card.source{border-color:var(--accent);border-width:1.5px;background:linear-gradient(180deg,var(--chip),var(--panel))}
+
+/* standout callouts */
+.callouts{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.callout{background:var(--panel);border-radius:16px;padding:20px;border-left:4px solid var(--accent)}
+.callout .num{font-family:'Sora',sans-serif;font-weight:800;font-size:12px;color:var(--accent);letter-spacing:.05em}
+.callout h3{font-size:15px;margin:6px 0 6px}
+.callout p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+
+/* metrics table */
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+thead th{background:var(--tblhead);text-align:left;font-family:'Sora',sans-serif;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--muted);padding:10px 14px;font-weight:700}
+tbody td{padding:12px 14px;border-top:1px solid var(--line);font-size:13px;vertical-align:top}
+tbody tr td:first-child{font-weight:700;white-space:nowrap;width:180px}
+tbody td.gap{color:var(--warn)}
+tbody td.have{color:var(--ok);font-weight:600}
+.src{font-size:11px;color:var(--muted);font-style:italic;display:block;margin-top:3px}
+
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.stat .n{font-family:'Sora',sans-serif;font-weight:800;font-size:22px;color:var(--accent)}
+.stat .l{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+
+.foundation{margin-top:40px;background:var(--found);border-radius:16px;padding:18px 20px;border:1px solid var(--line)}
+.foundation h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:10px;font-weight:700}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--chip);color:var(--ink);font-size:12.5px;padding:5px 11px;border-radius:8px;font-weight:500}
+
+@media (max-width:760px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .callouts{grid-template-columns:1fr}
+  .stat-row{grid-template-columns:1fr}
+  table,thead,tbody,th,td,tr{display:block}
+  thead{display:none}
+  tbody tr{border-top:1px solid var(--line);padding:10px 14px}
+  tbody td{border-top:none;padding:4px 0}
+  tbody tr td:first-child{color:var(--accent);width:auto}
+}
+@media (max-width:480px){ .grid{grid-template-columns:1fr} }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>MeetIQ — Features &amp; Research Comparison</h1>
+    <p>Every generated study material starts from one source of truth — the recorded voice lecture — and carries a verified trust score all the way through. Here's the full feature set, what stands out, and how it measures up against existing research.</p>
+  </header>
+
+  <section>
+    <div class="section-head"><h2>Core Features</h2><div class="rule"></div></div>
+    <div class="grid">
+      <div class="card source"><span class="icon">🎙️</span><h3>Voice Lecture Capture</h3><p>Record live or upload audio/video — the single source every generated material is built from</p></div>
+      <div class="card"><span class="icon">📝</span><h3>Confidence-Scored Transcription</h3><p>Speech-to-text with a per-segment confidence score, carried downstream</p></div>
+      <div class="card"><span class="icon">🔎</span><h3>Document &amp; Image OCR</h3><p>PDFs, slides, question papers read locally, with extraction confidence</p></div>
+      <div class="card"><span class="icon">🛡️</span><h3>Grounding Engine</h3><p>Every statement checked against the real transcript; unverifiable content deleted, not flagged</p></div>
+      <div class="card"><span class="icon">📓</span><h3>Notes &amp; Flowcharts</h3><p>Grounded revision notes and concept diagrams from the lecture</p></div>
+      <div class="card"><span class="icon">🗂️</span><h3>Flashcards</h3><p>Active-recall cards, each citation-linked to the exact lecture moment</p></div>
+      <div class="card"><span class="icon">❓</span><h3>Adaptive Quiz</h3><p>MCQ, subjective &amp; fill-in-the-blank — regenerated with new questions on weak topics until mastered</p></div>
+      <div class="card"><span class="icon">🖼️</span><h3>Visual Concept Explanation</h3><p>A single illustrative image explaining one concept, grounded in what was actually said</p></div>
+      <div class="card"><span class="icon">🎞️</span><h3>Adaptive Animated Slides</h3><p>A step-by-step, multi-image slide sequence walking through a weak concept — not one picture, a short visual lesson</p></div>
+      <div class="card"><span class="icon">🔍</span><h3>Cross-Session Search</h3><p>Ask a question, get an answer with exact timestamp citation, across every lecture</p></div>
+      <div class="card"><span class="icon">✅</span><h3>Faculty Approval Gate</h3><p>Nothing reaches a student until explicitly approved</p></div>
+      <div class="card"><span class="icon">📤</span><h3>PPT Export</h3><p>Auto-generated slide deck for faculty to hand out after class</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>What Stands Out</h2><div class="rule"></div></div>
+    <div class="callouts">
+      <div class="callout"><span class="num">01</span><h3>Deleted, not flagged</h3><p>Most tools show a disclaimer next to shaky content. MeetIQ removes what it can't verify before it's ever stored — there is nothing labeled "unverified" to see, because it never reaches you.</p></div>
+      <div class="callout"><span class="num">02</span><h3>Confidence follows the whole chain</h3><p>From raw speech recognition through every note, flashcard, and quiz answer — not just a transcript-level disclaimer, a score on each individual item.</p></div>
+      <div class="callout"><span class="num">03</span><h3>Adaptive, not one-shot</h3><p>A wrong topic gets new questions AND a new animated slide explanation, repeated until mastery — not a single static summary you either get or don't.</p></div>
+      <div class="callout"><span class="num">04</span><h3>Institution-ready from day one</h3><p>Faculty approval workflow, recording consent, audit trail, and tenant isolation are built into the architecture, not bolted on after launch.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Real Numbers Behind Why This Matters</h2><div class="rule"></div></div>
+    <div class="stat-row">
+      <div class="stat"><div class="n">~1%</div><div class="l">of Whisper transcripts contain entire fabricated sentences never spoken<span class="src">Careless Whisper, FAccT 2024</span></div></div>
+      <div class="stat"><div class="n">1 in 21</div><div class="l">AI-generated medical flashcards was hallucinated, even with optimized prompts<span class="src">BMC Medical Education, 2026</span></div></div>
+      <div class="stat"><div class="n">$21.5B</div><div class="l">projected AI meeting-assistant market size by 2033, up from $3.5B in 2025<span class="src">Grand View Research</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>How It Compares to Existing Research</h2><div class="rule"></div></div>
+    <table>
+      <thead><tr><th>System</th><th>What it does</th><th>What it's missing (vs. MeetIQ)</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Meetalk<span class="src">ACL KnowLLM 2025</span></td>
+          <td>Flags uncertain meeting-summary lines using the model's own disagreement signal</td>
+          <td class="gap">No ASR confidence used, no flashcards/quiz, no citations</td>
+        </tr>
+        <tr>
+          <td>Re-FRAME / SCOPE<span class="src">EMNLP 2025</span></td>
+          <td>Reduces hallucination in meeting summaries by 2 of 5 points on benchmark datasets</td>
+          <td class="gap">Summaries only — no per-item score, no study material</td>
+        </tr>
+        <tr>
+          <td>HalluGuard / VeriCite<span class="src">ACL Findings / SIGIR-AP 2025-26</span></td>
+          <td>Verifies citations for generic RAG-generated text against retrieved documents</td>
+          <td class="gap">Not audio-specific, no ASR confidence carried through</td>
+        </tr>
+        <tr>
+          <td>Multimodal Lecture KG<span class="src">arXiv 2608.03161</span></td>
+          <td>Combines ASR + OCR confidence to build a validated knowledge graph from lectures</td>
+          <td class="gap">Builds an internal graph, not user-facing study material or a visible trust score</td>
+        </tr>
+        <tr>
+          <td><b>MeetIQ</b></td>
+          <td colspan="2" class="have">The only system carrying confidence from voice transcription through to a visible, per-item trust score on generated flashcards/quiz — tied to an adaptive mastery loop with animated visual re-explanation</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="foundation">
+    <h3>Runs underneath every feature above</h3>
+    <div class="chips">
+      <span class="chip">🔒 Recording consent tracked</span>
+      <span class="chip">🏢 Tenant isolation per institution</span>
+      <span class="chip">📋 Full audit trail</span>
+      <span class="chip">🔑 Role-based access (faculty / student / admin)</span>
+      <span class="chip">🆓 Runs on free-tier infrastructure — one API key</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

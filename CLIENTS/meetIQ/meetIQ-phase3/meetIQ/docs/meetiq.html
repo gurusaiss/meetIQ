@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeetIQ Master Overview</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1a1c22; --muted:#5c6270;
+  --line:#e4e2dc; --accent:#4f46e5; --accent-ink:#ffffff;
+  --ok:#0f8a4b; --ok-bg:#e7f6ee; --warn:#a35b00; --warn-bg:#fdf1de;
+  --chip:#eeecf8; --found:#ece9e2; --tblhead:#f0eee8;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+    --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+    --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+    --chip:#242a3a; --found:#1c2027; --tblhead:#1c2027; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --panel:#191c22; --ink:#eef0f4; --muted:#9aa1b1;
+  --line:#2a2e38; --accent:#8b83ff; --accent-ink:#111318;
+  --ok:#48d38a; --ok-bg:#123322; --warn:#f0a94e; --warn-bg:#3a2a10;
+  --chip:#242a3a; --found:#1c2027; --tblhead:#1c2027; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.55 'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  padding:32px 16px 64px}
+h1,h2,h3{font-family:'Sora',system-ui,sans-serif;letter-spacing:-.01em;text-wrap:balance;margin:0}
+.wrap{max-width:1040px;margin:0 auto}
+header{text-align:center;margin-bottom:8px}
+header h1{font-size:28px;font-weight:800}
+header p{color:var(--muted);margin:10px 0 0;font-size:14.5px;max-width:680px;margin-left:auto;margin-right:auto}
+
+nav.toc{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:22px 0 8px}
+nav.toc a{background:var(--chip);color:var(--accent);text-decoration:none;font-size:12.5px;font-weight:600;
+  padding:6px 12px;border-radius:999px}
+
+section{margin-top:48px;scroll-margin-top:16px}
+.section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:18px}
+.section-head h2{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.section-head .rule{flex:1;height:1px;background:var(--line)}
+.section-sub{color:var(--muted);font-size:13px;margin:-10px 0 18px}
+
+/* ---- user flow ---- */
+.stage{position:relative;margin:0 auto;max-width:780px}
+.stage-label{display:flex;align-items:center;gap:10px;margin:28px 0 12px}
+.stage-num{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:'Sora',sans-serif}
+.stage-title{font-family:'Sora',sans-serif;font-weight:700;font-size:14px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.arrow{display:flex;justify-content:center;color:var(--muted);font-size:18px;margin:2px 0}
+.hero{background:linear-gradient(135deg,var(--accent),#8b7bf0);color:#fff;border:none;border-radius:16px;padding:20px 22px;
+  box-shadow:0 8px 24px -8px rgba(79,70,229,.45);max-width:780px;margin:0 auto}
+.hero h3{color:#fff;font-size:16px;margin-bottom:6px}
+.hero p{color:rgba(255,255,255,.88);margin:0}
+.hero .rule2{display:flex;gap:8px;align-items:flex-start;margin-top:9px;font-size:13px;color:rgba(255,255,255,.95)}
+.branch{border:1.5px dashed var(--line);border-radius:16px;padding:16px;margin:14px auto 0;max-width:780px}
+.branch-title{font-family:'Sora',sans-serif;font-weight:700;font-size:13px;color:var(--accent);margin-bottom:10px}
+.loop-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.loop-row .card{flex:0 1 145px}
+.loop-arrow{color:var(--muted);font-size:15px;flex:none}
+.loop-back{text-align:center;margin-top:8px;font-size:12px;color:var(--muted);font-style:italic}
+
+/* ---- cards ---- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;min-width:0;flex:1 1 210px}
+.card .icon{font-size:19px;display:block;margin-bottom:6px}
+.card h3{font-size:13.5px;font-weight:700;margin-bottom:4px}
+.card p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.45}
+.card.new{border-color:var(--ok);border-width:1.5px}
+.card.new h3::after{content:" · NEW";color:var(--ok);font-size:10px;font-weight:700;letter-spacing:.03em}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+
+/* callouts */
+.callouts{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.callout{background:var(--panel);border-radius:16px;padding:20px;border-left:4px solid var(--accent)}
+.callout .num{font-family:'Sora',sans-serif;font-weight:800;font-size:12px;color:var(--accent);letter-spacing:.05em}
+.callout h3{font-size:15px;margin:6px 0 6px}
+.callout p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+
+/* tables */
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+thead th{background:var(--tblhead);text-align:left;font-family:'Sora',sans-serif;font-size:11px;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--muted);padding:10px 14px;font-weight:700}
+tbody td{padding:12px 14px;border-top:1px solid var(--line);font-size:13px;vertical-align:top}
+tbody tr td:first-child{font-weight:700;white-space:nowrap}
+tbody td.gap{color:var(--warn)}
+tbody td.have{color:var(--ok);font-weight:600}
+.src{font-size:11px;color:var(--muted);font-style:italic;display:block;margin-top:3px}
+.table-wrap{overflow-x:auto}
+
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.stat .n{font-family:'Sora',sans-serif;font-weight:800;font-size:22px;color:var(--accent)}
+.stat .l{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+
+.foundation{margin-top:44px;background:var(--found);border-radius:16px;padding:18px 20px;border:1px solid var(--line)}
+.foundation h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:10px;font-weight:700}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--chip);color:var(--ink);font-size:12.5px;padding:5px 11px;border-radius:8px;font-weight:500}
+
+@media (max-width:760px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .callouts{grid-template-columns:1fr}
+  .stat-row{grid-template-columns:1fr}
+  .loop-row{flex-direction:column}
+  .loop-arrow{transform:rotate(90deg)}
+  table,thead,tbody,th,td,tr{display:block}
+  thead{display:none}
+  tbody tr{border-top:1px solid var(--line);padding:10px 14px}
+  tbody td{border-top:none;padding:4px 0}
+}
+@media (max-width:480px){ .grid{grid-template-columns:1fr} }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>MeetIQ — Master Overview</h1>
+    <p>Turns any recorded voice — a lecture, a meeting, a gathering, anyone, anywhere — into verified, adaptive study material. Every generated fact traces back to something actually said, or it's deleted before you ever see it.</p>
+  </header>
+  <nav class="toc">
+    <a href="#flow">User Flow</a>
+    <a href="#features">All Features</a>
+    <a href="#standout">Standout</a>
+    <a href="#platforms">Vs. Platforms</a>
+    <a href="#papers">Vs. Research</a>
+    <a href="#metrics">Real Numbers</a>
+  </nav>
+
+  <!-- ============ USER FLOW ============ -->
+  <section id="flow">
+    <div class="section-head"><h2>User Flow</h2><div class="rule"></div></div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">1</span><span class="stage-title">Input</span></div>
+      <div class="row">
+        <div class="card"><span class="icon">🎙️</span><h3>Record / Upload Voice</h3><p>Any lecture, meeting, or gathering — live or a file</p></div>
+        <div class="card new"><span class="icon">📖</span><h3>Source Book</h3><p>Upload textbook pages, images, or a PDF alongside the recording</p></div>
+        <div class="card new"><span class="icon">📋</span><h3>Exam Blueprint <i>(optional)</i></h3><p>Upload the expected exam pattern to shape generated content</p></div>
+      </div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">2</span><span class="stage-title">Capture &amp; Extract</span></div>
+      <div class="row">
+        <div class="card"><span class="icon">📝</span><h3>Speech-to-Text</h3><p>Per-segment confidence, carried downstream</p></div>
+        <div class="card"><span class="icon">🔎</span><h3>OCR Extraction</h3><p>Source book + question papers read locally, with extraction confidence</p></div>
+      </div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">3</span><span class="stage-title">Grounding Engine</span></div>
+      <div class="hero">
+        <h3>Every statement checked against the real source</h3>
+        <p>Voice transcript + source book, cross-referenced. No fact ships on trust alone.</p>
+        <div class="rule2">✅ <span><b>Cited &amp; supported</b> — kept, confidence carried through</span></div>
+        <div class="rule2">🚫 <span><b>Can't be traced to a real source</b> — deleted before it's ever stored or shown</span></div>
+      </div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">4</span><span class="stage-title">Generated Material</span></div>
+      <div class="row">
+        <div class="card"><span class="icon">📓</span><h3>Notes &amp; Flowcharts</h3><p>Grounded in the lecture</p></div>
+        <div class="card"><span class="icon">🔑</span><h3>Technical Terms</h3><p>Important terms extracted automatically</p></div>
+        <div class="card"><span class="icon">✍️</span><h3>Exam-Point Answers</h3><p>From definitions, theory &amp; diagrams in the source book — with a <b>Simplify</b> button for an easier version on demand</p></div>
+        <div class="card"><span class="icon">🗂️</span><h3>Flashcards</h3><p>Citation-linked to the exact moment</p></div>
+        <div class="card"><span class="icon">❓</span><h3>Adaptive Quiz</h3><p>Cross-referenced with the voice lecture <i>and</i> the source book</p></div>
+      </div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">5</span><span class="stage-title">Approval &amp; Access</span></div>
+      <div class="row">
+        <div class="card"><span class="icon">👩‍🏫</span><h3>Faculty Reviews</h3><p>Low-confidence items flagged for a closer look</p></div>
+        <div class="card"><span class="icon">✅</span><h3>Approve &amp; Release</h3><p>Nothing reaches a student unapproved</p></div>
+      </div>
+    </div>
+
+    <div class="arrow">↓</div>
+
+    <div class="stage">
+      <div class="stage-label"><span class="stage-num">6</span><span class="stage-title">Study &amp; Organize</span></div>
+      <div class="row">
+        <div class="card"><span class="icon">🔍</span><h3>Cross-Session Search</h3><p>Cited to the exact timestamp, across every recording</p></div>
+        <div class="card new"><span class="icon">📅</span><h3>Calendar View</h3><p>Day-wise lectures, topic names as events — built for exam revision</p></div>
+        <div class="card new"><span class="icon">🗃️</span><h3>Subject Folders</h3><p>Everything auto-organized by subject</p></div>
+        <div class="card"><span class="icon">📤</span><h3>Export</h3><p>Notes, Anki flashcards, or a PPT</p></div>
+      </div>
+
+      <div class="branch">
+        <div class="branch-title">↳ Adaptive Mastery Loop — from the Quiz</div>
+        <div class="loop-row">
+          <div class="card"><span class="icon">📝</span><h3>Take Quiz</h3><p>Scored by topic</p></div>
+          <div class="loop-arrow">→</div>
+          <div class="card"><span class="icon">🎯</span><h3>Weak Topic Found</h3><p>Mapped from wrong answers</p></div>
+          <div class="loop-arrow">→</div>
+          <div class="card"><span class="icon">🖼️</span><h3>Visual Explanation</h3><p>One illustrative image for the concept</p></div>
+          <div class="loop-arrow">→</div>
+          <div class="card"><span class="icon">🎞️</span><h3>Animated Slides</h3><p>Multi-image, step-by-step walkthrough</p></div>
+          <div class="loop-arrow">→</div>
+          <div class="card"><span class="icon">🔁</span><h3>Retest</h3><p>New questions, same topic</p></div>
+        </div>
+        <div class="loop-back">repeats until mastery threshold reached, then marked ✓ Mastered</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ALL FEATURES ============ -->
+  <section id="features">
+    <div class="section-head"><h2>Complete Feature List</h2><div class="rule"></div></div>
+    <div class="grid">
+      <div class="card"><span class="icon">🎙️</span><h3>Voice Capture</h3><p>Record live or upload — any lecture, meeting, or gathering</p></div>
+      <div class="card new"><span class="icon">📖</span><h3>Source Book Upload</h3><p>Textbook images/PDF cross-referenced with the recording</p></div>
+      <div class="card new"><span class="icon">📋</span><h3>Exam Blueprint</h3><p>Optional — tailors output to the expected exam pattern</p></div>
+      <div class="card"><span class="icon">📝</span><h3>Confidence-Scored Transcription</h3><p>Per-segment score, carried downstream</p></div>
+      <div class="card"><span class="icon">🔎</span><h3>OCR</h3><p>Documents, slides &amp; question papers, extraction confidence</p></div>
+      <div class="card"><span class="icon">🛡️</span><h3>Grounding Engine</h3><p>Unverifiable content deleted, not flagged</p></div>
+      <div class="card"><span class="icon">📓</span><h3>Notes &amp; Flowcharts</h3><p>Structured, grounded, topic-wise</p></div>
+      <div class="card new"><span class="icon">🔑</span><h3>Technical Terms Glossary</h3><p>Key terms extracted automatically</p></div>
+      <div class="card new"><span class="icon">✍️</span><h3>Exam-Point Answers + Simplify</h3><p>Theory/definition-based answers, one click simpler</p></div>
+      <div class="card"><span class="icon">🗂️</span><h3>Flashcards</h3><p>Active recall, citation-linked</p></div>
+      <div class="card new"><span class="icon">❓</span><h3>Adaptive Quiz</h3><p>MCQ/subjective/fill-blank, cross-referenced with the source book</p></div>
+      <div class="card"><span class="icon">🖼️</span><h3>Visual Concept Explanation</h3><p>One grounded illustrative image</p></div>
+      <div class="card new"><span class="icon">🎞️</span><h3>Adaptive Animated Slides</h3><p>Multi-image step-by-step re-explanation for weak topics</p></div>
+      <div class="card"><span class="icon">🔍</span><h3>Cross-Session Search</h3><p>Timestamp-cited answers across every recording</p></div>
+      <div class="card new"><span class="icon">📅</span><h3>Calendar Organization</h3><p>Day-wise, topic-as-event, built for exam revision</p></div>
+      <div class="card new"><span class="icon">🗃️</span><h3>Subject Folders</h3><p>Auto-organized, no manual filing</p></div>
+      <div class="card"><span class="icon">✅</span><h3>Faculty Approval Gate</h3><p>Nothing reaches a student unapproved</p></div>
+      <div class="card"><span class="icon">📤</span><h3>PPT Export</h3><p>Auto-generated deck for handout after class</p></div>
+      <div class="card"><span class="icon">🔒</span><h3>Compliance Layer</h3><p>Consent, tenant isolation, audit trail, RBAC</p></div>
+      <div class="card new"><span class="icon">🌐</span><h3>Any Use Case</h3><p>Not classroom-only — lectures, meetings, any spoken gathering</p></div>
+    </div>
+  </section>
+
+  <!-- ============ STANDOUT ============ -->
+  <section id="standout">
+    <div class="section-head"><h2>What Stands Out</h2><div class="rule"></div></div>
+    <div class="callouts">
+      <div class="callout"><span class="num">01</span><h3>Deleted, not flagged</h3><p>Unverifiable content is removed before it's ever stored — nothing labeled "unverified" reaches you, because it never gets that far.</p></div>
+      <div class="callout"><span class="num">02</span><h3>Two sources, cross-checked</h3><p>The voice lecture and the source textbook are checked against each other, not treated as two separate, disconnected uploads.</p></div>
+      <div class="callout"><span class="num">03</span><h3>Adaptive, not one-shot</h3><p>A weak topic gets new quiz questions AND a new animated slide walkthrough, repeated until mastery — not a single static summary.</p></div>
+      <div class="callout"><span class="num">04</span><h3>Institution-ready from day one</h3><p>Approval workflow, consent tracking, audit trail, and tenant isolation are architectural, not bolted on later.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ VS PLATFORMS ============ -->
+  <section id="platforms">
+    <div class="section-head"><h2>Vs. Existing Platforms</h2><div class="rule"></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Platform</th><th>What They Offer</th><th>What's Missing (vs. MeetIQ)</th></tr></thead>
+      <tbody>
+        <tr><td>Mindgrasp</td><td>Record/upload lectures, auto notes, flashcards, quizzes, AI tutor</td><td class="gap">No confidence score, no verification of any kind, anywhere on the product</td></tr>
+        <tr><td>NotebookLM</td><td>Takes Drive/PDF/YouTube/audio/images, cites timestamps, makes flashcards &amp; quizzes</td><td class="gap">Citations exist, but nothing is ever dropped for being unverifiable — no trust score per item</td></tr>
+        <tr><td>Otter.ai / Fireflies / Fathom / Granola</td><td>Meeting recording, transcription, summaries, some enterprise/admin controls</td><td class="gap">No study-material generation, no grounding verification, no faculty-approval workflow</td></tr>
+        <tr><td>Google Meet (Gemini "Take Notes for Me")</td><td>Free, bundled, real-time transcription + summary with clickable timestamps</td><td class="gap">Only works inside a live Meet call — can't touch in-person lectures or uploaded recordings; no confidence scoring</td></tr>
+        <tr><td><b>MeetIQ</b></td><td colspan="2" class="have">Confidence-scored, cross-referenced (lecture + source book), adaptive, institution-ready, and works on any recorded voice — not just Meet calls</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ============ VS RESEARCH ============ -->
+  <section id="papers">
+    <div class="section-head"><h2>Vs. Existing Research</h2><div class="rule"></div></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Paper</th><th>What It Does</th><th>What's Unique to MeetIQ</th></tr></thead>
+      <tbody>
+        <tr><td>Meetalk<span class="src">ACL KnowLLM 2025</span></td><td>Flags uncertain meeting-summary lines via model disagreement</td><td class="gap">No ASR confidence used, no flashcards/quiz, no citations</td></tr>
+        <tr><td>Re-FRAME / SCOPE<span class="src">EMNLP 2025</span></td><td>Reduces hallucination in meeting summaries by 2 of 5 points</td><td class="gap">Summaries only — no per-item score, no study material</td></tr>
+        <tr><td>HalluGuard / VeriCite<span class="src">ACL Findings / SIGIR-AP 2025-26</span></td><td>Verifies citations for generic RAG-generated text</td><td class="gap">Not audio-specific, no ASR confidence carried through</td></tr>
+        <tr><td>Multimodal Lecture KG<span class="src">arXiv 2608.03161</span></td><td>Combines ASR + OCR confidence into a validated knowledge graph</td><td class="gap">Builds an internal graph, not visible study material or a per-item trust score</td></tr>
+        <tr><td><b>MeetIQ</b></td><td colspan="2" class="have">Carries confidence from voice transcription through to a visible, per-item trust score on flashcards/quiz — tied to an adaptive mastery loop with animated re-explanation</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ============ METRICS ============ -->
+  <section id="metrics">
+    <div class="section-head"><h2>Real Numbers Behind Why This Matters</h2><div class="rule"></div></div>
+    <div class="stat-row">
+      <div class="stat"><div class="n">~1%</div><div class="l">of Whisper transcripts contain entire fabricated sentences never spoken<span class="src">Careless Whisper, FAccT 2024</span></div></div>
+      <div class="stat"><div class="n">1 in 21</div><div class="l">AI-generated medical flashcards was hallucinated, even with optimized prompts<span class="src">BMC Medical Education, 2026</span></div></div>
+      <div class="stat"><div class="n">$21.5B</div><div class="l">projected AI meeting-assistant market size by 2033, up from $3.5B in 2025<span class="src">Grand View Research</span></div></div>
+    </div>
+  </section>
+
+  <div class="foundation">
+    <h3>Runs underneath every feature above</h3>
+    <div class="chips">
+      <span class="chip">🔒 Recording consent tracked</span>
+      <span class="chip">🏢 Tenant isolation per institution</span>
+      <span class="chip">📋 Full audit trail</span>
+      <span class="chip">🔑 Role-based access (faculty / student / admin)</span>
+      <span class="chip">🆓 Free-tier infrastructure — one API key</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

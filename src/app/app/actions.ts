@@ -25,7 +25,6 @@ import { primarySlugFor } from '@/modules/merchants/slugs';
 import { parseMoneyToMinor } from '@/modules/core/money';
 import { acknowledgeDomainChange } from '@/modules/platform/settings';
 import { ingestImage } from '@/modules/media/upload';
-import { setMerchantPin, setPassword } from '@/modules/auth/service';
 
 export type FormState = { error?: string; success?: string };
 
@@ -454,30 +453,4 @@ export async function acknowledgeDomainChangeAction(): Promise<void> {
   const { tenantId } = await requireMerchant('profile:read');
   await acknowledgeDomainChange(tenantId);
   await revalidateMerchant(tenantId);
-}
-
-export async function changePasswordAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  try {
-    const { session } = await requireMerchant();
-    const password = String(formData.get('password') ?? '');
-    const confirmPassword = String(formData.get('confirmPassword') ?? '');
-    if (password !== confirmPassword) return { error: 'Passwords do not match.' };
-    await setPassword(session.userId, password);
-    return { success: 'Password updated.' };
-  } catch (error) {
-    return { error: describeAuthError(error) };
-  }
-}
-
-export async function changePinAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  try {
-    const { session } = await requireMerchant();
-    const pin = String(formData.get('pin') ?? '');
-    const confirmPin = String(formData.get('confirmPin') ?? '');
-    if (pin !== confirmPin) return { error: 'PINs do not match.' };
-    await setMerchantPin(session.userId, pin);
-    return { success: 'PIN updated.' };
-  } catch (error) {
-    return { error: describeAuthError(error) };
-  }
 }
