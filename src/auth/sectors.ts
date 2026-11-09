@@ -24,7 +24,7 @@ export interface SectorRole {
 /** Tile keys whose title/description a sector may reword. */
 export type WordKey =
   | "record" | "upload" | "text" | "file"
-  | "notes" | "flashcards" | "quiz" | "flowchart" | "slides" | "search" | "actions";
+  | "notes" | "flashcards" | "quiz" | "flowchart" | "slides" | "search" | "actions" | "transcript";
 
 export interface Sector {
   id: string;
@@ -37,6 +37,8 @@ export interface Sector {
   orgPlaceholder: string;
   /** What one recording is called here ("class", "meeting", "hearing"...). */
   noun: { one: string; many: string };
+  /** What a group of recordings is called here ("course", "matter"...). Every organisation can have several. */
+  groupNoun: { one: string; many: string };
   blurb: string;
   points: string[];
   roles: SectorRole[];
@@ -53,12 +55,14 @@ export const SECTORS: Sector[] = [
     tag: "Classes, labs and exams",
     orgLabel: "University or college name", orgPlaceholder: "State University",
     noun: { one: "class", many: "classes" },
+    groupNoun: { one: "course", many: "courses" },
     blurb: "Record a class, get verified notes, flashcards and a quiz, and release them to students after approval.",
     points: ["Faculty record and approve before students see anything", "Students study only approved material", "Consent and audit trail built in"],
     roles: [
       R("admin", "Admin", "🛡️", "admin", "admin", "Audit trail, retention and your team"),
       R("dean", "Dean", "🏛️", "review", "admin", "Approve content, audit and retention"),
       R("faculty", "Faculty", "🎓", "maker", "faculty", "Record, review, approve and export"),
+      R("ta", "Teaching Assistant", "📝", "review", "ta", "Review and approve for the classes you support"),
       R("student", "Student", "📖", "receiver", "student", "Study approved material and search"),
     ],
     words: {
@@ -68,6 +72,7 @@ export const SECTORS: Sector[] = [
       slides: ["Class slides", "Download a PowerPoint deck of the verified notes."],
       search: ["Ask your classes", "Search every class, with the exact moment cited."],
       actions: ["Follow-ups", "Action items assigned in class, cited to the exact moment."],
+      transcript: ["Class transcript & captions", "Timestamped transcript with SRT/VTT caption downloads, for accessibility."],
     },
   },
   {
@@ -75,6 +80,7 @@ export const SECTORS: Sector[] = [
     tag: "Meetings, teams and training",
     orgLabel: "Company name", orgPlaceholder: "Acme Corp",
     noun: { one: "meeting", many: "meetings" },
+    groupNoun: { one: "project", many: "projects" },
     blurb: "Minutes and decisions your team can trust, every line cited to what was actually said.",
     points: ["Managers record meetings and approve the minutes", "Employees see only approved minutes", "Every action is logged"],
     roles: [
@@ -97,6 +103,7 @@ export const SECTORS: Sector[] = [
     tag: "Depositions, hearings and audits",
     orgLabel: "Firm or practice name", orgPlaceholder: "Rao & Partners LLP",
     noun: { one: "hearing", many: "hearings" },
+    groupNoun: { one: "matter", many: "matters" },
     blurb: "Every statement traceable to the exact moment; low-confidence audio is flagged before it reaches a filing.",
     points: ["Cited transcripts with confidence on each line", "Partner approval before release", "Read-only auditor access to the audit trail"],
     roles: [
@@ -119,6 +126,7 @@ export const SECTORS: Sector[] = [
     tag: "Teaching rounds, CME and simulation",
     orgLabel: "Institution name", orgPlaceholder: "City Medical College",
     noun: { one: "round", many: "rounds" },
+    groupNoun: { one: "rotation", many: "rotations" },
     blurb: "A wrong flashcard is not an option, so each one is cited, scored and approved by an educator first.",
     points: ["Educators approve before trainees see anything", "Confidence on every flashcard and quiz item", "Consent and audit tools for the compliance team"],
     roles: [
@@ -141,6 +149,7 @@ export const SECTORS: Sector[] = [
     tag: "Academies, bootcamps and coaches",
     orgLabel: "Academy or practice name", orgPlaceholder: "Bright Academy",
     noun: { one: "session", many: "sessions" },
+    groupNoun: { one: "cohort", many: "cohorts" },
     blurb: "Turn every training session into verified course material and release it to learners after approval.",
     points: ["Trainers record sessions and approve material", "Learners get notes, flashcards and quizzes", "Coaches keep session notes per client"],
     roles: [
@@ -163,6 +172,7 @@ export const SECTORS: Sector[] = [
     tag: "Hearings, councils and records",
     orgLabel: "Department or agency", orgPlaceholder: "City Planning Office",
     noun: { one: "hearing", many: "hearings" },
+    groupNoun: { one: "docket", many: "dockets" },
     blurb: "Public records with a verifiable source trail and approval before anything is released.",
     points: ["Officers record and approve minutes", "Directors oversee the audit trail", "Auditors get read-only evidence access"],
     roles: [

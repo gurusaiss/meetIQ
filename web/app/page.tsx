@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getIdentity } from "../lib/auth.ts";
-import { getRepo, getAccounts, getCapture } from "../lib/singletons.ts";
+import { getRepo, getAccounts, getCapture, getService } from "../lib/singletons.ts";
 import { tilesFor, noun, toolHref } from "../lib/features.ts";
 import { getSectorRole, getSector } from "../../src/auth/sectors.ts";
 import { formatJoinCode } from "../../src/auth/accounts.ts";
@@ -18,11 +18,11 @@ const ADMIN_HREF: Record<string, string> = { approvals: "/approvals", audit: "/a
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ welcome?: string; queued?: string }>;
+  searchParams: Promise<{ welcome?: string; queued?: string; verified?: string }>;
 }) {
   const identity = await getIdentity();
   if (!identity) redirect("/login");
-  const { welcome, queued } = await searchParams;
+  const { welcome, queued, verified } = await searchParams;
 
   const lectures = await getRepo().listLecturesByCourse(identity.institutionId, identity.courseId!);
   const { inputs, tools, admin, access } = tilesFor(identity);
@@ -36,6 +36,8 @@ export default async function HomePage({
   const title = getSectorRole(identity.sector, identity.profile)?.name ?? identity.role;
   const sector = getSector(identity.sector);
   const inviteCode = await getAccounts().inviteCodeFor(identity);
+  const trackedActions = await getService().listActionItems(identity.institutionId, identity.courseId!, identity);
+  const openActions = trackedActions.filter((t) => !t.done).length;
 
   return (
     <>
@@ -50,6 +52,9 @@ export default async function HomePage({
         <div className="notice ok" role="status">
           Processing started for {queued} — it&apos;s running in the background, this page refreshes automatically.
         </div>
+      )}
+      {verified && (
+        <div className="notice ok" role="status">Email verified. Thanks!</div>
       )}
       <span className="eyebrow">
         {identity.orgName} · {title}
@@ -66,6 +71,18 @@ export default async function HomePage({
         <div className="stat"><span className="stat-icon"><Icon name="approvals" /></span><b>{processed}</b><span>Processed &amp; verified</span></div>
         <div className="stat"><span className="stat-icon"><Icon name="record" /></span><b>{waiting}</b><span>Waiting to process</span></div>
       </div>
+
+      {openActions > 0 && (
+        <div className="card">
+          <div className="row">
+            <div>
+              <strong>{openActions} open action item{openActions === 1 ? "" : "s"}</strong>
+              <div className="kpi">From your approved {many}. Assign them and tick them off in the tracker.</div>
+            </div>
+            <a className="btn small" href="/actions">Open the tracker</a>
+          </div>
+        </div>
+      )}
 
       {inviteCode && (
         <div className="card highlight">
@@ -123,7 +140,9 @@ export default async function HomePage({
             <div>
               <div className="session-id">{l.id}</div>
               <div className="kpi" style={{ marginTop: 4 }}>
-                <LectureStatusBadge status={l.status} /> <span className="chip">{l.captureSource}</span> · created{" "}
+                <LectureStatusBadge status={l.status} />{" "}
+                {l.hold && <span className="badge b-held" title={l.hold.reason}>legal hold</span>}{" "}
+                <span className="chip">{l.captureSource}</span> · created{" "}
                 {l.createdAt.slice(0, 16).replace("T", " ")}
               </div>
             </div>
@@ -131,7 +150,7 @@ export default async function HomePage({
               {l.status === "created" ? (
                 <>
                   {canManage && <ProcessForm id={l.id} />}
-                  {canManage && <DeleteLectureForm id={l.id} />}
+                  {canManage && !l.hold && <DeleteLectureForm id={l.id} />}
                 </>
               ) : l.status === "failed" ? (
                 // Reprocessing in place isn't allowed (see the comment on
@@ -141,7 +160,7 @@ export default async function HomePage({
                   <span className="kpi">
                     Processing failed. {canManage ? "Delete and create it again to retry." : "Ask your administrator to retry."}
                   </span>
-                  {canManage && <DeleteLectureForm id={l.id} />}
+                  {canManage && !l.hold && <DeleteLectureForm id={l.id} />}
                 </>
               ) : l.status === "processing" ? (
                 // Running on the background job queue (see
@@ -159,7 +178,7 @@ export default async function HomePage({
                   <a className="btn small ghost" href={toolHref("notes", l.id, false)}>
                     {canManage ? "Student view" : "Open"}
                   </a>
-                  {canManage && <DeleteLectureForm id={l.id} />}
+                  {canManage && !l.hold && <DeleteLectureForm id={l.id} />}
                 </>
               )}
             </div>

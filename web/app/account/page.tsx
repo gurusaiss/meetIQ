@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getIdentity } from "../../lib/auth.ts";
+import { getRepo } from "../../lib/singletons.ts";
 import { getSectorRole } from "../../../src/auth/sectors.ts";
 
 export const metadata = { title: "Account · MeetIQ" };
@@ -13,6 +14,8 @@ export default async function AccountPage({
   if (!identity) redirect("/login");
   const { error, ok } = await searchParams;
   const demo = identity.id.startsWith("demo-");
+  const account = demo ? null : await getRepo().getUserById(identity.id);
+  const needsVerification = account && !account.emailVerified;
 
   return (
     <>
@@ -20,9 +23,19 @@ export default async function AccountPage({
       <h1>{identity.name}</h1>
       <p className="sub">{getSectorRole(identity.sector, identity.profile)?.name ?? identity.role}</p>
 
+      {needsVerification && (
+        <div className="notice" role="alert">
+          <strong>Verify your email.</strong> We sent a link to {account!.email} when you signed up.
+          {ok === "sent" ? " Sent again — check your inbox." : ""}
+          <form action="/api/verify-email/resend" method="post" style={{ marginTop: 8 }}>
+            <button className="btn small ghost">Resend verification email</button>
+          </form>
+        </div>
+      )}
+
       <div className="card" style={{ maxWidth: 520 }}>
         <h2>Change password</h2>
-        {ok && <div className="notice ok" role="status">Password changed.</div>}
+        {ok === "1" && <div className="notice ok" role="status">Password changed.</div>}
         {error && <div className="notice" role="alert">{error}</div>}
         {demo ? (
           <p className="kpi">Quick demo sessions have no password. Create an account to get one.</p>

@@ -6,9 +6,13 @@ import {
   flashcardsToAnkiCsv,
   quizToMarkdown,
   actionsToMarkdown,
+  transcriptToSrt,
+  transcriptToVtt,
+  transcriptToText,
 } from "../../../../../../src/export/exporters.ts";
 import type { RevisionNotes, Quiz, Flashcard, ActionsAndDecisions } from "../../../../../../src/types.ts";
-import { htmlError } from "../../../../../lib/http.ts";
+import { htmlError, isError, escapeHtml } from "../../../../../lib/http.ts";
+import { config } from "../../../../../../src/config.ts";
 import { slidesFromNotes } from "../../../../../lib/slides.ts";
 import { buildPptx } from "../../../../../lib/pptx.ts";
 
@@ -19,7 +23,14 @@ export async function GET(
   const identity = await getIdentity();
   if (!identity) return NextResponse.redirect(new URL("/login", req.url), { status: 303 });
   const { id: lectureId, file } = await params;
-  const approved = await getService().studentAssets(identity!.institutionId, lectureId);
+  let approved;
+  try {
+    approved = await getService().studentAssets(identity!.institutionId, lectureId, identity!);
+  } catch (e) {
+    // Not in a course the viewer can reach: the same 404 as a lecture that doesn't exist.
+    if (isError(e, "NotFoundError")) return htmlError(404, "<h1>404</h1>");
+    throw e;
+  }
 
   const download = (body: string, type: string, name: string) =>
     new NextResponse(body, {
@@ -57,6 +68,20 @@ export async function GET(
       "text/markdown",
       `${lectureId}-actions.md`,
     );
+  }
+  if (file === "transcript.srt" || file === "transcript.vtt" || file === "transcript.txt") {
+    try {
+      const t = await getService().getTranscript(identity!.institutionId, lectureId, identity!, "export");
+      if (file === "transcript.srt") return download(transcriptToSrt(t), "application/x-subrip", `${lectureId}-transcript.srt`);
+      if (file === "transcript.vtt") return download(transcriptToVtt(t), "text/vtt", `${lectureId}-transcript.vtt`);
+      return download(transcriptToText(lectureId, t, config.quality.confidenceFlagThreshold), "text/plain", `${lectureId}-transcript.txt`);
+    } catch (e) {
+      if (isError(e, "AuthorizationError")) {
+        return htmlError(403, `<h1>Transcript not released yet</h1><div class="notice">${escapeHtml(e.message)}</div>`);
+      }
+      if (isError(e, "NotFoundError")) return htmlError(404, "<h1>No transcript for this session</h1>");
+      throw e;
+    }
   }
   if (file === "slides.pptx") {
     const a = approved.find((x) => x.type === "notes");

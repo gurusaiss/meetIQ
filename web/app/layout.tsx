@@ -2,6 +2,8 @@ import "./globals.css";
 import type { ReactNode, CSSProperties } from "react";
 import { PwaSetup } from "../components/PwaSetup.tsx";
 import { getIdentity } from "../lib/auth.ts";
+import { getService } from "../lib/singletons.ts";
+import { groupNoun } from "../lib/features.ts";
 import { getSector, getSectorRole } from "../../src/auth/sectors.ts";
 
 export const metadata = {
@@ -23,6 +25,10 @@ export const viewport = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const identity = await getIdentity();
   const accent = getSector(identity?.sector)?.accent;
+  // Only show a course chip when there's more than one to be in: a single-course organisation looks exactly as before.
+  const courses = identity ? await getService().accessibleCourses(identity.institutionId, identity) : [];
+  const current = courses.length > 1 ? courses.find((c) => c.id === identity?.courseId) : undefined;
+  const groupLabel = identity ? groupNoun(identity, true) : "courses";
   return (
     <html lang="en">
       <body style={accent ? ({ ["--sector" as string]: accent } as CSSProperties) : undefined}>
@@ -45,7 +51,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </label>
               <nav>
                 <a className="navlink" href="/">Workspace</a>
+                <a className="navlink" href="/courses">
+                  {groupLabel.charAt(0).toUpperCase() + groupLabel.slice(1)}
+                  {current && <span className="chip" style={{ marginLeft: 6 }}>{current.code}</span>}
+                </a>
                 <a className="navlink" href="/search">Search</a>
+                <a className="navlink" href="/actions">Actions</a>
                 {(identity.role === "faculty" || identity.role === "ta" || identity.role === "admin") && (
                   <a className="navlink" href="/approvals">Approvals</a>
                 )}

@@ -8,11 +8,22 @@
  * organisation's data by choosing a role, because the role only means
  * something inside the tenant they belong to.
  */
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import type { Repository, UserRecord } from "../persistence/repository.ts";
 import type { Identity } from "./session.ts";
 import { hashPassword, verifyPassword, burnVerify, passwordProblem } from "./password.ts";
 import { getSector, getSectorRole, selectableRoles } from "./sectors.ts";
+import type { EmailProvider } from "../integrations/email.ts";
+import { MockEmailProvider } from "../integrations/email.ts";
+import { logger } from "../observability/logger.ts";
+
+/** How long a clicked link stays good for. Verification is low-stakes and people are slow to click; reset is higher-stakes and short-lived. */
+const VERIFY_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export class AccountError extends Error {
   override name = "AccountError";
@@ -76,9 +87,54 @@ function newId(prefix: string): string {
 
 export class AccountService {
   private readonly repo: Repository;
+  private readonly email: EmailProvider;
+  /** Where the app is reachable, for links inside emails. No trailing slash. */
+  private readonly baseUrl: string;
 
-  constructor(repo: Repository) {
+  constructor(repo: Repository, email: EmailProvider = new MockEmailProvider(), baseUrl = "http://localhost:3000") {
     this.repo = repo;
+    this.email = email;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
+  /**
+   * Create a token, store only its hash, and best-effort email the raw one in
+   * a link. A real mail provider failing (bad key, provider outage) must not
+   * break signup or a reset request — the person can always ask to resend —
+   * so this logs and swallows rather than throwing.
+   */
+  private async issueAndSend(
+    user: Pick<UserRecord, "id" | "email" | "name">,
+    kind: "verify_email" | "reset_password",
+    ttlMs: number,
+    path: string,
+    subject: string,
+    body: (link: string) => string,
+  ): Promise<void> {
+    const raw = randomBytes(32).toString("hex");
+    await this.repo.createAuthToken({
+      tokenHash: hashToken(raw),
+      userId: user.id,
+      kind,
+      expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+    });
+    const link = `${this.baseUrl}${path}?token=${raw}`;
+    try {
+      await this.email.send({ to: user.email, subject, text: body(link) });
+    } catch (e) {
+      logger.error("email.send_failed", { kind, provider: this.email.name, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  private sendVerificationEmail(user: Pick<UserRecord, "id" | "email" | "name">): Promise<void> {
+    return this.issueAndSend(
+      user,
+      "verify_email",
+      VERIFY_TOKEN_TTL_MS,
+      "/verify-email",
+      "Verify your email — MeetIQ",
+      (link) => `Hi ${user.name},\n\nConfirm this is your email address:\n\n${link}\n\nThis link works for 48 hours. If you didn't create a MeetIQ account, ignore this message.`,
+    );
   }
 
   async signUp(input: SignUpInput): Promise<Identity> {
@@ -178,7 +234,70 @@ export class AccountService {
       target: `${role.name} · ${email}`,
       ts: now,
     });
+    await this.sendVerificationEmail(user);
     return { id: userId, name, role: role.base, institutionId: institutionId!, sector: sector.id, profile: role.id, orgName, courseId: courseId!, owner };
+  }
+
+  /** Confirm an emailed link. Consuming a token is the proof — this needs no signed-in session. */
+  async verifyEmail(rawToken: string): Promise<{ email: string; name: string }> {
+    if (!rawToken) throw new AccountError(400, "That verification link is missing its token.");
+    const tokenHash = hashToken(rawToken);
+    const token = await this.repo.getValidAuthToken(tokenHash, "verify_email");
+    if (!token) throw new AccountError(400, "That verification link has expired or was already used. Ask for a new one from your account page.");
+    const user = await this.repo.getUserById(token.userId);
+    if (!user) throw new AccountError(404, "That account no longer exists.");
+    await this.repo.setEmailVerified(user.id, true);
+    await this.repo.markAuthTokenUsed(tokenHash);
+    await this.repo.audit({ institutionId: user.institutionId, actor: user.id, action: "email.verified", target: user.email, ts: new Date().toISOString() });
+    return { email: user.email, name: user.name };
+  }
+
+  /** Re-send the verification link to the signed-in person's own address. A no-op (not an error) if already verified. */
+  async resendVerification(identity: Identity): Promise<void> {
+    const user = await this.repo.getUserById(identity.id);
+    if (!user) throw new AccountError(404, "Account not found.");
+    if (user.emailVerified) return;
+    await this.sendVerificationEmail(user);
+  }
+
+  /**
+   * Request a reset link. Always resolves the same way whether or not the
+   * email matches an account (and whether or not that account has a
+   * password), and always takes about the same time either way — the UI
+   * message, and this method's behaviour, must never reveal which emails
+   * have accounts.
+   */
+  async requestPasswordReset(emailRaw: string): Promise<void> {
+    const email = normalizeEmail(emailRaw);
+    const user = email ? await this.repo.getUserByEmail(email) : null;
+    if (!user) {
+      await burnVerify("x"); // spend roughly the time a real lookup+hash would, so timing doesn't leak the answer
+      return;
+    }
+    await this.issueAndSend(
+      user,
+      "reset_password",
+      RESET_TOKEN_TTL_MS,
+      "/reset-password",
+      "Reset your password — MeetIQ",
+      (link) => `Hi ${user.name},\n\nSomeone asked to reset the password on this account. If that was you:\n\n${link}\n\nThis link works for 30 minutes and can be used once. If it wasn't you, ignore this message — your password hasn't changed.`,
+    );
+  }
+
+  /** Complete a reset: set the new password and sign out every existing session (the service layer has no session store; the caller does that). */
+  async resetPassword(rawToken: string, next: string): Promise<{ userId: string }> {
+    if (!rawToken) throw new AccountError(400, "That reset link is missing its token.");
+    const tokenHash = hashToken(rawToken);
+    const token = await this.repo.getValidAuthToken(tokenHash, "reset_password");
+    if (!token) throw new AccountError(400, "That reset link has expired or was already used. Request a new one.");
+    const problem = passwordProblem(next);
+    if (problem) throw new AccountError(400, problem);
+    const user = await this.repo.getUserById(token.userId);
+    if (!user) throw new AccountError(404, "That account no longer exists.");
+    await this.repo.updatePasswordHash(user.id, await hashPassword(next));
+    await this.repo.markAuthTokenUsed(tokenHash);
+    await this.repo.audit({ institutionId: user.institutionId, actor: user.id, action: "password.reset_self", target: user.email, ts: new Date().toISOString() });
+    return { userId: user.id };
   }
 
   /** Returns the identity, or throws a 401 that doesn't say whether the email exists. */

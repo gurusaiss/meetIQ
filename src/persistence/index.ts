@@ -18,12 +18,14 @@ export interface RepositoryConfig {
   /** PostgresRepository: connection string. Required when driver=postgres. */
   databaseUrl?: string;
   vectorDim?: number;
+  /** HMAC key for the tamper-evident audit chain (AUDIT_CHAIN_KEY). Optional. */
+  auditKey?: string;
 }
 
 export function createRepository(cfg: RepositoryConfig): Repository {
   switch (cfg.driver) {
     case "sqlite":
-      return new SqliteRepository(cfg.sqlitePath);
+      return new SqliteRepository(cfg.sqlitePath, { auditKey: cfg.auditKey ?? "" });
     case "postgres": {
       if (!cfg.databaseUrl) {
         throw new Error("REPO_DRIVER=postgres requires DATABASE_URL to be set");
@@ -31,6 +33,7 @@ export function createRepository(cfg: RepositoryConfig): Repository {
       return new PostgresRepository({
         connectionString: cfg.databaseUrl,
         ...(cfg.vectorDim !== undefined ? { vectorDim: cfg.vectorDim } : {}),
+        auditKey: cfg.auditKey ?? "",
       });
     }
     default:

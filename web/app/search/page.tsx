@@ -20,7 +20,7 @@ export default async function SearchPage({
 
   const { q } = await searchParams;
   const query = (q ?? "").trim();
-  const hits = query ? await getService().searchCourse(identity.institutionId, identity.courseId!, query, 3) : [];
+  const hits = query ? await getService().searchCourse(identity.institutionId, identity.courseId!, identity, query, 3) : [];
 
   return (
     <>

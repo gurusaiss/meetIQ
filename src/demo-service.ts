@@ -66,19 +66,20 @@ for (const a of await service.reviewQueue("inst-a", "lec-1")) {
     `• ${a.type.padEnd(10)} status=${a.status.padEnd(9)} flagged=${(a.flagRatio * 100).toFixed(0)}%`,
   );
 }
-const beforeApproval = await service.studentAssets("inst-a", "lec-1");
+const student = { id: "sam", role: "student" as const };
+const beforeApproval = await service.studentAssets("inst-a", "lec-1", student);
 console.log(`\nStudent view before approval: ${beforeApproval.length} assets (correct — nothing released yet)`);
 
 hr("FACULTY APPROVES (only faculty/TA may)");
 const notes = assets.find((a) => a.type === "notes")!;
 await service.approveAsset("inst-a", notes.id, { id: "anika", role: "faculty" });
 console.log(`Approved "${notes.type}".`);
-const afterApproval = await service.studentAssets("inst-a", "lec-1");
+const afterApproval = await service.studentAssets("inst-a", "lec-1", student);
 console.log(`Student view now: ${afterApproval.map((a) => a.type).join(", ") || "(none)"}`);
 
 hr("STUDENT: chat with the course");
 for (const q of ["How are collisions handled?", "When do we resize the table?"]) {
-  const [hit] = await service.searchCourse("inst-a", "cs101", q, 1);
+  const [hit] = await service.searchCourse("inst-a", "cs101", student, q, 1);
   console.log(`\nQ: ${q}`);
   console.log(
     hit

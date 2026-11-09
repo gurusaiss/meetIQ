@@ -26,8 +26,13 @@ function cfg(over: Partial<Config["providers"]>, quality?: Partial<Config["quali
     integrations: {
       capture: "mock",
       lms: "mock",
+      captureExternalId: "CS101-2026S",
+      lmsCourseId: "CS101-2026S",
       zoom: { accountId: "", clientId: "", clientSecret: "" },
       slack: { webhookUrl: "" },
+      canvas: { baseUrl: "", accessToken: "" },
+      email: "mock",
+      resend: { apiKey: "", from: "" },
     },
   } as Config;
 }
@@ -94,6 +99,39 @@ test("validateConfig requires Zoom credentials when CAPTURE_SOURCE=zoom", () => 
     },
   });
   assert.equal(ok.some((e) => /ZOOM/.test(e)), false);
+});
+
+test("validateConfig requires Canvas credentials, over https, when LMS_CONNECTOR=canvas", () => {
+  const c = cfg({});
+  const missing = validateConfig({ ...c, integrations: { ...c.integrations, lms: "canvas" } });
+  assert.equal(missing.some((e) => /CANVAS_BASE_URL/.test(e)), true);
+
+  const http = validateConfig({
+    ...c,
+    integrations: { ...c.integrations, lms: "canvas", canvas: { baseUrl: "http://x.edu", accessToken: "t" } },
+  });
+  assert.equal(http.some((e) => /https/.test(e)), true);
+
+  const ok = validateConfig({
+    ...c,
+    integrations: { ...c.integrations, lms: "canvas", canvas: { baseUrl: "https://x.edu", accessToken: "t" } },
+  });
+  assert.deepEqual(ok, []);
+});
+
+test("validateConfig rejects an unknown EMAIL_PROVIDER, and requires Resend credentials when selected", () => {
+  const c = cfg({});
+  assert.equal(
+    validateConfig({ ...c, integrations: { ...c.integrations, email: "mailgun" as never } }).some((e) => /EMAIL_PROVIDER/.test(e)),
+    true,
+  );
+  const missing = validateConfig({ ...c, integrations: { ...c.integrations, email: "resend" } });
+  assert.equal(missing.some((e) => /RESEND_API_KEY/.test(e)), true);
+  const ok = validateConfig({
+    ...c,
+    integrations: { ...c.integrations, email: "resend", resend: { apiKey: "k", from: "a@b.test" } },
+  });
+  assert.deepEqual(ok, []);
 });
 
 test("validateConfig requires a webhook URL when LMS_CONNECTOR=slack", () => {

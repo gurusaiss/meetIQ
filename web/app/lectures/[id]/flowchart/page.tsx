@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { redirect, notFound } from "next/navigation";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
+import { releasedAssetsOr404 } from "../../../../lib/lectures.ts";
 import type { RevisionNotes } from "../../../../../src/types.ts";
 
 export const metadata = { title: "Flowchart · MeetIQ" };
@@ -17,7 +18,7 @@ export default async function FlowchartPage({ params }: { params: Promise<{ id: 
   const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const approved = await getService().studentAssets(identity.institutionId, lectureId);
+  const approved = await releasedAssetsOr404(identity, lectureId);
   const notes = approved.find((a) => a.type === "notes")?.content as RevisionNotes | undefined;
   const topics = (notes?.topics ?? []).filter((t) => t.points.length > 0);
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);

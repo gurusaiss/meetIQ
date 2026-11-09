@@ -34,9 +34,15 @@ import type {
   ConsentRecord,
   StoredAsset,
   AuditEvent,
+  ActionStatus,
+  CourseMember,
+  CoursePatch,
+  AuthToken,
+  LegalHold,
   UserRecord,
   OrgProfile,
 } from "./repository.ts";
+import { eventHash, GENESIS } from "../audit/chain.ts";
 
 const { Pool } = pg;
 
@@ -49,11 +55,22 @@ CREATE TABLE IF NOT EXISTS institutions (
   data_region TEXT, retention_days INTEGER
 );
 CREATE TABLE IF NOT EXISTS courses (
-  id TEXT PRIMARY KEY, institution_id TEXT, code TEXT, title TEXT
+  id TEXT PRIMARY KEY, institution_id TEXT, code TEXT, title TEXT,
+  join_code TEXT, external_id TEXT, archived BOOLEAN, created_by TEXT, created_at TEXT,
+  seq BIGSERIAL
+);
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token_hash TEXT PRIMARY KEY, user_id TEXT, kind TEXT, expires_at TEXT, used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+CREATE TABLE IF NOT EXISTS course_members (
+  institution_id TEXT, course_id TEXT, user_id TEXT, enrolled_at TEXT,
+  PRIMARY KEY (course_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS lectures (
   id TEXT PRIMARY KEY, institution_id TEXT, course_id TEXT, media_ref TEXT,
-  status TEXT, capture_source TEXT, created_at TEXT
+  status TEXT, capture_source TEXT, created_at TEXT,
+  hold_reason TEXT, hold_by TEXT, hold_at TEXT
 );
 CREATE TABLE IF NOT EXISTS consent (
   lecture_id TEXT PRIMARY KEY, institution_id TEXT, policy TEXT,
@@ -71,8 +88,14 @@ CREATE TABLE IF NOT EXISTS chunks (
   id TEXT PRIMARY KEY, institution_id TEXT, lecture_id TEXT, course_id TEXT,
   text TEXT, segment_ids TEXT, start_sec REAL, embedding VECTOR(${vectorDim})
 );
+CREATE TABLE IF NOT EXISTS action_status (
+  institution_id TEXT, lecture_id TEXT, item_index INTEGER, done BOOLEAN,
+  assignee TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (institution_id, lecture_id, item_index)
+);
 CREATE TABLE IF NOT EXISTS audit (
-  institution_id TEXT, actor TEXT, action TEXT, target TEXT, ts TEXT
+  institution_id TEXT, actor TEXT, action TEXT, target TEXT, ts TEXT,
+  hash TEXT, prev_hash TEXT, seq BIGSERIAL
 );
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, password_hash TEXT,
@@ -86,6 +109,25 @@ CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(institution_id);
 CREATE INDEX IF NOT EXISTS idx_lectures_tenant ON lectures(institution_id);
 CREATE INDEX IF NOT EXISTS idx_assets_lecture ON assets(institution_id, lecture_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_course ON chunks(institution_id, course_id);
+
+-- Columns added after the first release. CREATE TABLE IF NOT EXISTS never alters
+-- an existing table, so a database made by an older version needs these; each is
+-- a no-op when the column is already there, so this is safe on every start.
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS hold_reason TEXT;
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS hold_by TEXT;
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS hold_at TEXT;
+ALTER TABLE audit ADD COLUMN IF NOT EXISTS hash TEXT;
+ALTER TABLE audit ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+ALTER TABLE audit ADD COLUMN IF NOT EXISTS seq BIGSERIAL;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS join_code TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS archived BOOLEAN;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS created_by TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS created_at TEXT;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS seq BIGSERIAL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_courses_join_code ON courses(join_code);
+CREATE INDEX IF NOT EXISTS idx_audit_chain ON audit(institution_id, seq);
 `;
 }
 
@@ -105,13 +147,17 @@ export interface PostgresRepositoryOptions {
   connectionString: string;
   /** Must match the configured embeddings provider's output dimension. */
   vectorDim?: number;
+  /** HMAC key for the audit chain (AUDIT_CHAIN_KEY). Empty = plain SHA-256. */
+  auditKey?: string;
 }
 
 export class PostgresRepository implements Repository {
   private pool: InstanceType<typeof Pool>;
   private ready: Promise<void>;
+  private readonly auditKey: string | undefined;
 
   constructor(opts: PostgresRepositoryOptions) {
+    this.auditKey = opts.auditKey || undefined;
     this.pool = new Pool({ connectionString: opts.connectionString });
     this.ready = this.pool.query(schema(opts.vectorDim ?? 256)).then(() => undefined);
   }
@@ -136,6 +182,38 @@ export class PostgresRepository implements Repository {
   async getUserByEmail(email: string): Promise<UserRecord | null> {
     const rows = await this.q(`SELECT * FROM users WHERE email=$1`, [email]);
     return rows[0] ? rowToUser(rows[0]) : null;
+  }
+
+  async getUserById(userId: string): Promise<UserRecord | null> {
+    const rows = await this.q(`SELECT * FROM users WHERE id=$1`, [userId]);
+    return rows[0] ? rowToUser(rows[0]) : null;
+  }
+
+  async setEmailVerified(userId: string, verified: boolean): Promise<void> {
+    await this.q(`UPDATE users SET email_verified=$1 WHERE id=$2`, [verified, userId]);
+  }
+
+  async createAuthToken(t: AuthToken): Promise<void> {
+    await this.q(`INSERT INTO auth_tokens (token_hash,user_id,kind,expires_at,used_at) VALUES ($1,$2,$3,$4,$5)`, [
+      t.tokenHash, t.userId, t.kind, t.expiresAt, t.usedAt ?? null,
+    ]);
+  }
+
+  async getValidAuthToken(tokenHash: string, kind: AuthToken["kind"]): Promise<AuthToken | null> {
+    const rows = await this.q(`SELECT * FROM auth_tokens WHERE token_hash=$1 AND kind=$2`, [tokenHash, kind]);
+    const r = rows[0];
+    if (!r || r.used_at || (r.expires_at as string) < new Date().toISOString()) return null;
+    return {
+      tokenHash: r.token_hash as string,
+      userId: r.user_id as string,
+      kind: r.kind as AuthToken["kind"],
+      expiresAt: r.expires_at as string,
+      usedAt: (r.used_at as string | null) ?? null,
+    };
+  }
+
+  async markAuthTokenUsed(tokenHash: string): Promise<void> {
+    await this.q(`UPDATE auth_tokens SET used_at=$1 WHERE token_hash=$2`, [new Date().toISOString(), tokenHash]);
   }
 
   async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
@@ -191,12 +269,72 @@ export class PostgresRepository implements Repository {
     };
   }
 
+  /**
+   * Insert, or on conflict refresh only code and title. The other fields (join
+   * code, archived, external id) are managed through `updateCourse`, so the
+   * startup seed re-upserting a course can never reset them.
+   */
   async upsertCourse(c: Course): Promise<void> {
     await this.q(
-      `INSERT INTO courses (id,institution_id,code,title) VALUES ($1,$2,$3,$4)
+      `INSERT INTO courses (id,institution_id,code,title,join_code,external_id,archived,created_by,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT(id) DO UPDATE SET code=excluded.code, title=excluded.title`,
-      [c.id, c.institutionId, c.code, c.title],
+      [c.id, c.institutionId, c.code, c.title, c.joinCode ?? null, c.externalId ?? null, Boolean(c.archived), c.createdBy ?? null, c.createdAt ?? null],
     );
+  }
+
+  async getCourse(institutionId: string, courseId: string): Promise<Course | null> {
+    const rows = await this.q(`SELECT * FROM courses WHERE id=$1 AND institution_id=$2`, [courseId, institutionId]);
+    return rows[0] ? rowToCourse(rows[0]) : null;
+  }
+
+  async listCourses(institutionId: string): Promise<Course[]> {
+    const rows = await this.q(`SELECT * FROM courses WHERE institution_id=$1 ORDER BY seq`, [institutionId]);
+    return rows.map(rowToCourse);
+  }
+
+  async getCourseByJoinCode(joinCode: string): Promise<Course | null> {
+    const rows = await this.q(`SELECT * FROM courses WHERE join_code=$1`, [joinCode]);
+    return rows[0] ? rowToCourse(rows[0]) : null;
+  }
+
+  async updateCourse(institutionId: string, courseId: string, patch: CoursePatch): Promise<void> {
+    const cur = await this.getCourse(institutionId, courseId);
+    if (!cur) return;
+    const n = { ...cur, ...patch };
+    await this.q(
+      `UPDATE courses SET code=$1, title=$2, external_id=$3, join_code=$4, archived=$5 WHERE id=$6 AND institution_id=$7`,
+      [n.code, n.title, n.externalId ?? null, n.joinCode ?? null, Boolean(n.archived), courseId, institutionId],
+    );
+  }
+
+  async addCourseMember(m: CourseMember): Promise<void> {
+    await this.q(
+      `INSERT INTO course_members (institution_id,course_id,user_id,enrolled_at) VALUES ($1,$2,$3,$4) ON CONFLICT (course_id,user_id) DO NOTHING`,
+      [m.institutionId, m.courseId, m.userId, m.enrolledAt],
+    );
+  }
+
+  async removeCourseMember(institutionId: string, courseId: string, userId: string): Promise<void> {
+    await this.q(`DELETE FROM course_members WHERE institution_id=$1 AND course_id=$2 AND user_id=$3`, [institutionId, courseId, userId]);
+  }
+
+  async listCourseMembers(institutionId: string, courseId: string): Promise<CourseMember[]> {
+    const rows = await this.q(
+      `SELECT * FROM course_members WHERE institution_id=$1 AND course_id=$2 ORDER BY enrolled_at, user_id`,
+      [institutionId, courseId],
+    );
+    return rows.map((r) => ({
+      institutionId: r.institution_id as string,
+      courseId: r.course_id as string,
+      userId: r.user_id as string,
+      enrolledAt: r.enrolled_at as string,
+    }));
+  }
+
+  async listMemberCourseIds(institutionId: string, userId: string): Promise<string[]> {
+    const rows = await this.q(`SELECT course_id FROM course_members WHERE institution_id=$1 AND user_id=$2`, [institutionId, userId]);
+    return rows.map((r) => r.course_id as string);
   }
 
   async createLecture(l: Lecture): Promise<void> {
@@ -231,7 +369,7 @@ export class PostgresRepository implements Repository {
   }
 
   async deleteLecture(institutionId: string, lectureId: string): Promise<void> {
-    for (const table of ["assets", "chunks", "transcripts", "consent", "lectures"]) {
+    for (const table of ["assets", "chunks", "transcripts", "consent", "action_status", "lectures"]) {
       const col = table === "lectures" ? "id" : "lecture_id";
       await this.q(`DELETE FROM ${table} WHERE ${col}=$1 AND institution_id=$2`, [
         lectureId,
@@ -379,17 +517,35 @@ export class PostgresRepository implements Repository {
   }
 
   async audit(e: AuditEvent): Promise<void> {
-    await this.q(`INSERT INTO audit (institution_id,actor,action,target,ts) VALUES ($1,$2,$3,$4,$5)`, [
-      e.institutionId,
-      e.actor,
-      e.action,
-      e.target,
-      e.ts,
-    ]);
+    await this.ready;
+    // Read-the-previous-hash and insert must be one atomic step per tenant, or
+    // two concurrent appends could chain to the same predecessor and fork the
+    // chain. The advisory lock serialises appends for one organisation only.
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [e.institutionId]);
+      const last = await client.query(
+        `SELECT hash FROM audit WHERE institution_id=$1 AND hash IS NOT NULL ORDER BY seq DESC LIMIT 1`,
+        [e.institutionId],
+      );
+      const prevHash = (last.rows[0]?.hash as string | undefined) ?? GENESIS;
+      const hash = eventHash(prevHash, e, this.auditKey);
+      await client.query(
+        `INSERT INTO audit (institution_id,actor,action,target,ts,hash,prev_hash) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [e.institutionId, e.actor, e.action, e.target, e.ts, hash, prevHash],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async listAudit(institutionId: string): Promise<AuditEvent[]> {
-    const rows = await this.q(`SELECT * FROM audit WHERE institution_id=$1 ORDER BY ts`, [
+    const rows = await this.q(`SELECT * FROM audit WHERE institution_id=$1 ORDER BY seq`, [
       institutionId,
     ]);
     return rows.map((r) => ({
@@ -398,7 +554,42 @@ export class PostgresRepository implements Repository {
       action: r.action as string,
       target: r.target as string,
       ts: r.ts as string,
+      hash: (r.hash as string | null) ?? null,
+      prevHash: (r.prev_hash as string | null) ?? null,
     }));
+  }
+
+  async listActionStatuses(institutionId: string): Promise<ActionStatus[]> {
+    const rows = await this.q(
+      `SELECT * FROM action_status WHERE institution_id=$1 ORDER BY lecture_id, item_index`,
+      [institutionId],
+    );
+    return rows.map((r) => ({
+      institutionId: r.institution_id as string,
+      lectureId: r.lecture_id as string,
+      itemIndex: r.item_index as number,
+      done: Boolean(r.done),
+      assignee: (r.assignee as string | null) ?? null,
+      updatedBy: r.updated_by as string,
+      updatedAt: r.updated_at as string,
+    }));
+  }
+
+  async upsertActionStatus(s: ActionStatus): Promise<void> {
+    await this.q(
+      `INSERT INTO action_status (institution_id,lecture_id,item_index,done,assignee,updated_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (institution_id,lecture_id,item_index) DO UPDATE SET
+         done=EXCLUDED.done, assignee=EXCLUDED.assignee, updated_by=EXCLUDED.updated_by, updated_at=EXCLUDED.updated_at`,
+      [s.institutionId, s.lectureId, s.itemIndex, s.done, s.assignee, s.updatedBy, s.updatedAt],
+    );
+  }
+
+  async setLegalHold(institutionId: string, lectureId: string, hold: LegalHold | null): Promise<void> {
+    await this.q(
+      `UPDATE lectures SET hold_reason=$1, hold_by=$2, hold_at=$3 WHERE id=$4 AND institution_id=$5`,
+      [hold?.reason ?? null, hold?.by ?? null, hold?.at ?? null, lectureId, institutionId],
+    );
   }
 
   async healthcheck(): Promise<boolean> {
@@ -426,6 +617,7 @@ function rowToUser(r: Record<string, unknown>): UserRecord {
     profile: r.profile as string,
     baseRole: r.base_role as UserRecord["baseRole"],
     createdAt: r.created_at as string,
+    emailVerified: Boolean(r.email_verified),
   };
 }
 
@@ -440,6 +632,20 @@ function rowToOrg(r: Record<string, unknown>): OrgProfile {
   };
 }
 
+function rowToCourse(r: Record<string, unknown>): Course {
+  return {
+    id: r.id as string,
+    institutionId: r.institution_id as string,
+    code: r.code as string,
+    title: r.title as string,
+    joinCode: (r.join_code as string | null) ?? null,
+    externalId: (r.external_id as string | null) ?? null,
+    archived: Boolean(r.archived),
+    createdBy: (r.created_by as string | null) ?? null,
+    createdAt: (r.created_at as string | null) ?? null,
+  };
+}
+
 function rowToLecture(r: Record<string, unknown>): Lecture {
   return {
     id: r.id as string,
@@ -449,6 +655,9 @@ function rowToLecture(r: Record<string, unknown>): Lecture {
     status: r.status as LectureStatus,
     captureSource: r.capture_source as string,
     createdAt: r.created_at as string,
+    ...(r.hold_at
+      ? { hold: { reason: (r.hold_reason as string) ?? "", by: (r.hold_by as string) ?? "", at: r.hold_at as string } }
+      : {}),
   };
 }
 

@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
   const service = getService();
 
   try {
-    await service.runRetention(identity!.institutionId, identity!);
+    const { purged, heldSkipped } = await service.runRetentionDetailed(identity!.institutionId, identity!);
+    return NextResponse.redirect(new URL(`/audit?purged=${purged}&held=${heldSkipped}`, req.url), { status: 303 });
   } catch (e) {
     if (isError(e, "AuthorizationError")) return forbidResponse();
     throw e;
   }
-  return NextResponse.redirect(new URL("/audit", req.url), { status: 303 });
 }

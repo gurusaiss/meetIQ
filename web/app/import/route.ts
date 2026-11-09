@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../lib/auth.ts";
-import { getService, getCapture, EXTERNAL_COURSE } from "../../lib/singletons.ts";
+import { getRepo, getService, getCapture, CAPTURE_EXTERNAL_ID } from "../../lib/singletons.ts";
 import { forbidResponse, htmlError, escapeHtml } from "../../lib/http.ts";
 
 export async function POST(req: NextRequest) {
@@ -8,11 +8,13 @@ export async function POST(req: NextRequest) {
   if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbidResponse();
 
   try {
+    // This course's own id in the capture system, if it has one; else the organisation-wide default.
+    const course = await getRepo().getCourse(identity!.institutionId, identity!.courseId!);
     await getService().importFromCapture(
       identity!.institutionId,
       identity!.courseId!,
       getCapture(),
-      EXTERNAL_COURSE,
+      course?.externalId || CAPTURE_EXTERNAL_ID,
       identity!,
     );
   } catch (e) {

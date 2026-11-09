@@ -72,6 +72,7 @@ const repo = createRepository({
   sqlitePath: dataDir + "lip.sqlite",
   databaseUrl: config.repository.databaseUrl,
   vectorDim: config.repository.vectorDim,
+  auditKey: config.security.auditKey,
 });
 logger.info("repository.selected", { driver: config.repository.driver });
 const service = new LectureService(repo);
@@ -79,11 +80,12 @@ const sessions = new SessionStore();
 // Login-endpoint abuse guard: 10 attempts / minute per client IP.
 const loginLimiter = new RateLimiter(10, 60_000);
 // One connector for the process lifetime so pushes accumulate.
-const lms = getLmsConnector(config.integrations.lms, config.integrations.slack);
+const lms = getLmsConnector(config.integrations.lms, config.integrations.slack, config.integrations.canvas);
 const capture = getCaptureSource(config.integrations.capture, config.integrations.zoom);
 logger.info("integrations.selected", { capture: config.integrations.capture, lms: config.integrations.lms });
-// External course identifier as it exists in the LMS/capture system.
-const EXTERNAL_COURSE = "CS101-2026S";
+// Identifiers as they exist in the capture system / LMS (configurable).
+const CAPTURE_EXTERNAL_ID = config.integrations.captureExternalId;
+const LMS_COURSE_ID = config.integrations.lmsCourseId;
 
 // Seeding must complete before the server accepts requests — with a real
 // network-backed adapter (Postgres) this is genuine I/O, not a formality.
@@ -294,7 +296,7 @@ const server = createServer(async (req, res) => {
     if (method === "POST" && path === "/import") {
       if (!hasRole(identity, ["faculty", "ta", "admin"])) return forbid();
       try {
-        await service.importFromCapture(INSTITUTION_ID, COURSE_ID, capture, EXTERNAL_COURSE, identity);
+        await service.importFromCapture(INSTITUTION_ID, COURSE_ID, capture, CAPTURE_EXTERNAL_ID, identity);
       } catch (e) {
         logger.error("capture.import.failed", { error: e instanceof Error ? e.message : String(e) });
         const detail = e instanceof Error ? e.message.slice(0, 300) : "Unknown error";
@@ -315,7 +317,7 @@ const server = createServer(async (req, res) => {
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
       let count: number;
       try {
-        count = await service.publishToLms(INSTITUTION_ID, lectureId, lms, EXTERNAL_COURSE, identity);
+        count = await service.publishToLms(INSTITUTION_ID, lectureId, lms, LMS_COURSE_ID, identity);
       } catch (e) {
         logger.error("lecture.publish.failed", { lectureId, error: e instanceof Error ? e.message : String(e) });
         return html(
@@ -346,6 +348,12 @@ const server = createServer(async (req, res) => {
         await service.deleteLecture(INSTITUTION_ID, decodeURIComponent(m[1]!), identity);
       } catch (e) {
         if (e instanceof AuthorizationError) return forbid();
+        if (e instanceof ComplianceError) {
+          return html(
+            layout("Can't delete", `<h1>Can't delete</h1><div class="notice">${esc(e.message)}</div><p style="margin-top:16px"><a href="/">← Dashboard</a></p>`, identity, nonce),
+            409,
+          );
+        }
         throw e;
       }
       return redirect("/");
@@ -368,7 +376,7 @@ const server = createServer(async (req, res) => {
       const lectureId = decodeURIComponent(m[1]!);
       const lecture = await repo.getLecture(INSTITUTION_ID, lectureId);
       if (!lecture) return html(layout("Not found", "<h1>Lecture not found</h1>", identity, nonce), 404);
-      const assets = await service.studentAssets(INSTITUTION_ID, lectureId);
+      const assets = await service.studentAssets(INSTITUTION_ID, lectureId, identity);
       return html(studentPage(lecture, assets, identity, nonce));
     }
 
@@ -390,7 +398,7 @@ const server = createServer(async (req, res) => {
     if (method === "GET" && m) {
       const lectureId = decodeURIComponent(m[1]!);
       const file = m[2]!;
-      const approved = await service.studentAssets(INSTITUTION_ID, lectureId);
+      const approved = await service.studentAssets(INSTITUTION_ID, lectureId, identity);
       const download = (body: string, type: string, name: string) =>
         html(body, 200, {
           "content-type": `${type}; charset=utf-8`,
@@ -419,7 +427,7 @@ const server = createServer(async (req, res) => {
     // ── Search (any authenticated) ──
     if (method === "GET" && path === "/search") {
       const q = (url.searchParams.get("q") ?? "").trim();
-      const hits = q ? await service.searchCourse(INSTITUTION_ID, COURSE_ID, q, 3) : [];
+      const hits = q ? await service.searchCourse(INSTITUTION_ID, COURSE_ID, identity, q, 3) : [];
       return html(searchPage(q, hits, identity, nonce));
     }
 

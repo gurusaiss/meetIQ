@@ -35,12 +35,15 @@ import { SessionStore, RateLimiter } from "../../src/auth/session.ts";
 import { AccountService } from "../../src/auth/accounts.ts";
 import { getLmsConnector, type LmsConnector } from "../../src/integrations/lms.ts";
 import { getCaptureSource, type CaptureSource } from "../../src/integrations/capture.ts";
+import { getEmailProvider } from "../../src/integrations/email.ts";
 
 /** The shared sample organisation behind the "Quick demo" sign-in. */
 export const DEMO_INSTITUTION_ID = "inst-a";
 export const DEMO_COURSE_ID = "cs101";
 export const DEMO_ORG_NAME = "State University";
-export const EXTERNAL_COURSE = "CS101-2026S";
+/** Which recordings to import (capture system's id) and which course to publish to (LMS's id). Configurable; see .env.example. */
+export const CAPTURE_EXTERNAL_ID = config.integrations.captureExternalId;
+export const LMS_COURSE_ID = config.integrations.lmsCourseId;
 
 interface Globals {
   __lipRepo?: Repository;
@@ -74,16 +77,21 @@ function build(): void {
     sqlitePath: dataDir + "lip.sqlite",
     databaseUrl: config.repository.databaseUrl,
     vectorDim: config.repository.vectorDim,
+    auditKey: config.security.auditKey,
   });
   logger.info("repository.selected", { driver: config.repository.driver });
   g.__lipService = new LectureService(g.__lipRepo);
-  g.__lipAccounts = new AccountService(g.__lipRepo);
+  g.__lipAccounts = new AccountService(
+    g.__lipRepo,
+    getEmailProvider(config.integrations.email, config.integrations.resend),
+    config.appBaseUrl,
+  );
   g.__lipSessions = new SessionStore();
   // Per client: generous (a school/office can share one address). Per account
   // (getEmailLimiter): tight, which is what actually stops password guessing.
   g.__lipLoginLimiter = new RateLimiter(60, 60_000);
   g.__lipEmailLimiter = new RateLimiter(10, 60_000);
-  g.__lipLms = getLmsConnector(config.integrations.lms, config.integrations.slack);
+  g.__lipLms = getLmsConnector(config.integrations.lms, config.integrations.slack, config.integrations.canvas);
   g.__lipCapture = getCaptureSource(config.integrations.capture, config.integrations.zoom);
   logger.info("integrations.selected", { capture: config.integrations.capture, lms: config.integrations.lms });
 }

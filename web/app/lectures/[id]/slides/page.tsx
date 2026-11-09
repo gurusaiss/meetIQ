@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
 import { getRepo, getService } from "../../../../lib/singletons.ts";
+import { releasedAssetsOr404 } from "../../../../lib/lectures.ts";
 import { slidesFromNotes } from "../../../../lib/slides.ts";
 import type { RevisionNotes } from "../../../../../src/types.ts";
 
@@ -13,7 +14,7 @@ export default async function SlidesPage({ params }: { params: Promise<{ id: str
   const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const approved = await getService().studentAssets(identity.institutionId, lectureId);
+  const approved = await releasedAssetsOr404(identity, lectureId);
   const notes = approved.find((a) => a.type === "notes")?.content as RevisionNotes | undefined;
   const slides = notes ? slidesFromNotes(notes) : [];
   const canManage = hasRole(identity, ["faculty", "ta", "admin"]);

@@ -102,9 +102,132 @@ export class SlackLmsConnector implements LmsConnector {
   }
 }
 
+export interface CanvasCredentials {
+  /** Your institution's Canvas host, e.g. https://yourschool.instructure.com (https only). */
+  baseUrl: string;
+  /** An API access token (Account → Settings → New Access Token), or a developer-key token. */
+  accessToken: string;
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Canvas wiki pages are HTML, our exporters emit Markdown. This converts the
+ * small subset the exporters actually produce (headings, bullets, checkboxes,
+ * bold, italics, rules). Everything is HTML-escaped FIRST: the text comes from
+ * transcripts, i.e. from whatever was said in a room, and must never be able
+ * to inject markup into a page students will open.
+ */
+export function markdownToHtml(md: string): string {
+  const inline = (s: string) =>
+    escHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])_(.+?)_(?=[\s).,;:]|$)/g, "$1<em>$2</em>");
+  const out: string[] = [];
+  let inList = false;
+  const closeList = () => {
+    if (inList) out.push("</ul>");
+    inList = false;
+  };
+  for (const raw of md.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.trim() === "") {
+      closeList();
+      continue;
+    }
+    const bullet = line.match(/^- (\[ \] )?(.*)$/);
+    if (bullet) {
+      if (!inList) out.push("<ul>");
+      inList = true;
+      out.push(`<li>${bullet[1] ? "☐ " : ""}${inline(bullet[2]!)}</li>`);
+      continue;
+    }
+    closeList();
+    const h = line.match(/^(#{1,3}) (.*)$/);
+    if (h) out.push(`<h${h[1]!.length}>${inline(h[2]!)}</h${h[1]!.length}>`);
+    else if (/^-{3,}$/.test(line)) out.push("<hr>");
+    else out.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return out.join("\n");
+}
+
+/** "my lecture_1" → "meetiq-my-lecture-1-notes": a stable page slug so re-publishing updates in place. */
+function canvasSlug(item: LmsItem): string {
+  const clean = `${item.lectureId}-${item.type}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `meetiq-${clean}`;
+}
+
+/**
+ * Real Canvas LMS connector (the university counterpart to Slack): publishes
+ * each approved item as a Canvas wiki Page in the course, through Canvas's
+ * REST API with a Bearer access token. Idempotent — each item has a stable
+ * slug, so publishing again updates the page rather than creating duplicates
+ * (PUT creates-or-updates; if a Canvas build answers 404 to a PUT for a page
+ * that doesn't exist yet, we fall back to an explicit create).
+ *
+ * `externalCourseId` is a numeric Canvas course id, or anything else, which is
+ * treated as an SIS course id (`sis_course_id:<id>`), the form registrars use.
+ *
+ * Pages are created PUBLISHED: "Publish approved" is the faculty's explicit
+ * release, and the approval gate has already run before anything gets here.
+ *
+ * Same contract as the other real adapters: implemented against Canvas's
+ * documented API, not yet exercised against a live Canvas (no institution
+ * credentials in this environment).
+ */
+export class CanvasLmsConnector implements LmsConnector {
+  readonly name = "canvas";
+  readonly published: Array<{ externalCourseId: string; item: LmsItem }> = [];
+  private readonly base: string;
+  private readonly token: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(creds: CanvasCredentials, fetchImpl: typeof fetch = fetch) {
+    if (!creds.baseUrl || !creds.accessToken) {
+      throw new Error("Canvas connector requires CANVAS_BASE_URL and CANVAS_ACCESS_TOKEN.");
+    }
+    if (!/^https:\/\//i.test(creds.baseUrl)) {
+      throw new Error("CANVAS_BASE_URL must start with https:// (the access token is sent to it).");
+    }
+    this.base = creds.baseUrl.replace(/\/+$/, "");
+    this.token = creds.accessToken;
+    this.fetchImpl = fetchImpl;
+  }
+
+  async publish(externalCourseId: string, items: LmsItem[]): Promise<number> {
+    const courseRef = /^\d+$/.test(externalCourseId) ? externalCourseId : `sis_course_id:${externalCourseId}`;
+    const coursePath = `${this.base}/api/v1/courses/${encodeURIComponent(courseRef)}/pages`;
+    let count = 0;
+    for (const item of items) {
+      const form = new URLSearchParams({
+        "wiki_page[title]": item.title,
+        "wiki_page[body]": item.contentType === "text/csv" ? `<pre>${escHtml(item.body)}</pre>` : markdownToHtml(item.body),
+        "wiki_page[published]": "true",
+      });
+      const headers = { authorization: `Bearer ${this.token}`, "content-type": "application/x-www-form-urlencoded" };
+
+      let res = await this.fetchImpl(`${coursePath}/${canvasSlug(item)}`, { method: "PUT", headers, body: form });
+      if (res.status === 404) {
+        res = await this.fetchImpl(coursePath, { method: "POST", headers, body: form });
+      }
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 200);
+        throw new Error(`Canvas rejected ${item.type} for ${item.lectureId}: ${res.status} ${detail}`);
+      }
+      count++;
+      this.published.push({ externalCourseId, item });
+    }
+    return count;
+  }
+}
+
 export function getLmsConnector(
   name: string,
   slackCreds?: SlackCredentials,
+  canvasCreds?: CanvasCredentials,
 ): LmsConnector {
   switch (name) {
     case "mock":
@@ -113,6 +236,8 @@ export function getLmsConnector(
       if (!slackCreds) throw new Error("Slack connector selected but no credentials were provided.");
       return new SlackLmsConnector(slackCreds);
     case "canvas":
+      if (!canvasCreds) throw new Error("Canvas connector selected but no credentials were provided.");
+      return new CanvasLmsConnector(canvasCreds);
     case "moodle":
     case "blackboard":
       return new UnimplementedLmsConnector(name);

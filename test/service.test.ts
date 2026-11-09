@@ -189,9 +189,9 @@ test("faculty approval gate: students cannot approve, faculty can", async () => 
 test("students only see approved assets", async () => {
   const { service } = await svc();
   const assets = await processed(service);
-  assert.equal((await service.studentAssets("inst-a", "lec-1")).length, 0); // none approved yet
+  assert.equal((await service.studentAssets("inst-a", "lec-1", { id: "sam", role: "student" })).length, 0); // none approved yet
   await service.approveAsset("inst-a", assets[0]!.id, { id: "anika", role: "faculty" });
-  assert.equal((await service.studentAssets("inst-a", "lec-1")).length, 1);
+  assert.equal((await service.studentAssets("inst-a", "lec-1", { id: "sam", role: "student" })).length, 1);
 });
 
 test("tenant isolation: another institution cannot read the data", async () => {
@@ -206,7 +206,7 @@ test("tenant isolation: another institution cannot read the data", async () => {
 test("course search returns citable hits from persisted chunks", async () => {
   const { service } = await svc();
   await processed(service);
-  const hits = await service.searchCourse("inst-a", "course-cs101", "collision resolution", 3);
+  const hits = await service.searchCourse("inst-a", "course-cs101", { id: "sam", role: "student" }, "collision resolution", 3);
   assert.equal(hits.length > 0, true);
   assert.equal(hits[0]!.chunk.segmentIds.length > 0, true);
 });

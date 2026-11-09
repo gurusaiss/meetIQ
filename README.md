@@ -130,7 +130,7 @@ seconds); every request after is fast.
 ### Tests
 
 ```bash
-npm test               # pipeline + persistence + gates + isolation + queue + integrations (103 tests)
+npm test               # pipeline + persistence + gates + isolation + queue + integrations (204 tests; 17 of them need DATABASE_URL pointing at Postgres+pgvector and skip otherwise)
 npm run typecheck
 cd web && npm test      # builds the Next app + drives the full HTTP journey
 ```
@@ -206,16 +206,88 @@ in [`docs/DECISIONS.md`](docs/DECISIONS.md). The short version:
   (those three remain tested stubs pending institutional credentials).
   `LMS_CONNECTOR=slack` pushes approved notes/flashcards/quiz/decisions back
   out via an Incoming Webhook — the natural distribution target for a
-  company/team, which doesn't have an LMS the way a university does
-  (Canvas/Moodle/Blackboard remain tested stubs). Both default to `mock` so
-  the import/publish flow is fully testable with zero credentials; see
+  company/team, which doesn't have an LMS the way a university does.
+  `LMS_CONNECTOR=canvas` is the university counterpart: each approved item
+  becomes a Canvas Page in the course (stable slug, so re-publishing updates
+  in place; Markdown is converted to HTML with everything escaped first).
+  Moodle/Blackboard remain tested stubs. All default to `mock` so the
+  import/publish flow is fully testable with zero credentials; see
   `src/integrations/capture.ts` and `src/integrations/lms.ts`.
+- **Email verification and self-service password reset** (the roadmap's last
+  named gap): signing up sends a verification link; a real adapter
+  (`EMAIL_PROVIDER=resend`) now exists alongside the mock, following the same
+  provider pattern as capture/LMS. "Forgot password" on the login page emails a
+  reset link. Both are raw, single-use tokens (only their SHA-256 hash is
+  stored — the same discipline as session tokens), time-limited (48h / 30min),
+  and a reset signs out every other session on the account. A request for an
+  unknown email behaves identically to a known one (same redirect, same
+  rate-limit bucket) so the response can't be used to find out who has an
+  account. A failed send (bad key, provider outage) never blocks signup — the
+  person can always ask to resend from their account page.
+- **Multiple courses per organisation** (University-first; the same mechanism is
+  a "project", "matter", "cohort"... in the other fields). Each course keeps its
+  own recordings, search and action items; faculty and admins create them, admins
+  archive them, and a nav chip shows which one you're in. Access is enforced in
+  the service, not the pages: staff (faculty/TA/admin) can open every course in
+  their organisation; students and auditors can open the organisation's original
+  course (so a single-course organisation behaves exactly as before, with nothing
+  to migrate) plus any course they've **enrolled** in with its join code. A
+  lecture in a course you can't reach is reported as "not found", the same as one
+  that doesn't exist, across the student view, transcript, exports, flowchart,
+  slides, search and the action tracker. The "current course" is only a cookie
+  preference that is re-checked against your access on every request, so a forged
+  value does nothing. Join codes can be replaced (revoking the old one), people
+  can be removed (access ends at once), and bad codes all get one identical reply.
+  Each course also has its own LMS/capture id, so importing and publishing go to
+  the right Canvas course instead of one shared value.
+- **Action tracker** (Company-first): `/actions` lists every action item from
+  your approved meetings in one place, with open/done/unassigned counts and an
+  "Assigned to me" view. Staff assign items to a named person and tick them off;
+  everyone else reads. Only items from an *approved* actions set ever appear, so
+  the tracker never surfaces unreleased AI output. Each change is audited, and
+  the dashboard shows how many items are still open. The transcript's speaker
+  label is shown only as a hint ("said by SPEAKER_0"); an assignee is a person
+  staff typed, never inferred.
+- **Legal & audit completion**:
+  - **Tamper-evident audit trail.** Each event is hash-chained to the previous one
+    (per organisation); the audit page verifies the chain and says "Chain broken
+    at event N" if a row was edited, removed, inserted or reordered. Optional
+    `AUDIT_CHAIN_KEY` makes the hashes HMACs, so a database-only attacker can't
+    recompute them. Auditors can export CSV/JSON with the verdict and every hash
+    (exporting is itself logged; CSV cells are defused against formula injection).
+    The chain can't see the *newest* events being deleted, so the audit page shows
+    the head hash to record outside the system. It is evidence, not prevention.
+  - **Legal hold.** Any staff role can place one (with a reason or matter
+    reference); only an admin can release it. While held, a recording can't be
+    deleted by anyone and retention skips it (and says so), because deleting held
+    material is spoliation. A preservation order outranks an erasure request.
+  - **Transcript fingerprint.** A digest of each transcript is recorded in the
+    chain when processing finishes; the transcript page re-checks it and flags
+    "changed since it was produced" if it no longer matches, so a deposition
+    transcript's integrity can be shown rather than asserted.
+  - Existing databases upgrade in place (guarded column migrations; older audit
+    events show as "legacy" and the chain starts after them), tested on both
+    SQLite and a real Postgres.
+- **University completion**: a transcript page with SRT/VTT/TXT caption
+  downloads (the accessibility surface universities must provide). The
+  transcript is raw speech recognition, so it follows the same release rule as
+  everything else: staff always see it, students and auditors only after
+  something has been approved and released; exports are audited, and
+  low-confidence lines are marked rather than hidden. The University field also
+  gains a Teaching Assistant role (mapped to the `ta` permission role).
 
 ## Roadmap
 
-Not built yet, and why: email-based verification and self-service reset
-(needs a mail provider); the university/legal-specific capture and LMS
-adapters (Echo360, Panopto, Kaltura, Canvas, Moodle, Blackboard) — real,
-working adapters now exist for the company-priority pair (Zoom capture +
-Slack publish, see above); the rest are tested stubs pending institutional
-API/LTI credentials, same shape, just not built yet.
+Not built yet, and why: the university/legal-specific capture and LMS
+adapters (Echo360, Panopto, Kaltura, Moodle, Blackboard) — real adapters
+now exist for Zoom, Slack and Canvas (see above); the rest are tested stubs
+pending institutional API/LTI credentials, same shape, just not built yet.
+Also not built: employees ticking off their own items (an assignee is free text,
+so matching it to a signed-in person would be unreliable; staff update items for
+now), reminders/notifications for overdue items, due dates; per-course staff
+assignment (every staff member can open every course in their organisation, and a
+TA is not limited to the courses they assist); bulk enrolment from an LMS roster
+(students enrol with a code); deleting a course (it can only be archived); the
+per-field wording for "course" (project, matter, cohort...) is a first guess you
+may want to reword in `src/auth/sectors.ts`; redaction of a transcript before
+release; privilege tagging. The zero-dependency server stays single-course.

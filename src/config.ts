@@ -19,6 +19,8 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 export const config = {
+  /** Where the app is reachable, for links inside emails (verification, password reset). No trailing slash. */
+  appBaseUrl: str("APP_BASE_URL", "http://localhost:3000").replace(/\/+$/, ""),
   providers: {
     transcription: str("TRANSCRIPTION_PROVIDER", "mock"),
     llm: str("LLM_PROVIDER", "mock"),
@@ -53,6 +55,14 @@ export const config = {
     capture: str("CAPTURE_SOURCE", "mock"),
     /** lms: mock | slack | canvas | moodle | blackboard (the latter three are tested stubs, pending LTI/API credentials). */
     lms: str("LMS_CONNECTOR", "mock"),
+    /**
+     * Which recordings to pull, in the capture system's own terms: a Zoom user
+     * id/email ("me" = the OAuth app's own account). Echo360/Panopto would take
+     * a course id here. The default only suits the mock source.
+     */
+    captureExternalId: str("CAPTURE_EXTERNAL_ID", process.env.CAPTURE_SOURCE === "zoom" ? "me" : "CS101-2026S"),
+    /** Where to publish, in the LMS's own terms: a Canvas course id, or its SIS id. */
+    lmsCourseId: str("LMS_COURSE_ID", "CS101-2026S"),
     zoom: {
       accountId: str("ZOOM_ACCOUNT_ID", ""),
       clientId: str("ZOOM_CLIENT_ID", ""),
@@ -60,6 +70,17 @@ export const config = {
     },
     slack: {
       webhookUrl: str("SLACK_WEBHOOK_URL", ""),
+    },
+    canvas: {
+      /** e.g. https://yourschool.instructure.com — your institution's own Canvas host. */
+      baseUrl: str("CANVAS_BASE_URL", ""),
+      accessToken: str("CANVAS_ACCESS_TOKEN", ""),
+    },
+    /** email: mock | resend | ses | sendgrid (the latter two are tested stubs, pending API credentials). */
+    email: str("EMAIL_PROVIDER", "mock"),
+    resend: {
+      apiKey: str("RESEND_API_KEY", ""),
+      from: str("EMAIL_FROM", ""),
     },
   },
   security: {
@@ -87,6 +108,13 @@ export const config = {
      * DEMO_LOGIN=1 to enable it for a showcase deploy.
      */
     demoLogin: bool("DEMO_LOGIN", process.env.NODE_ENV !== "production"),
+    /**
+     * HMAC key for the tamper-evident audit chain. Optional: without it the chain
+     * is plain SHA-256 (still detects edits, but someone with database write
+     * access could recompute it). Set it BEFORE first use and keep it: changing
+     * or losing it makes earlier events fail verification.
+     */
+    auditKey: str("AUDIT_CHAIN_KEY", ""),
   },
 } as const;
 
@@ -99,6 +127,7 @@ const VALID = {
   repository: ["sqlite", "postgres"],
   capture: ["mock", "zoom", "echo360", "panopto", "kaltura"],
   lms: ["mock", "slack", "canvas", "moodle", "blackboard"],
+  email: ["mock", "resend", "ses", "sendgrid"],
 };
 
 /**
@@ -120,6 +149,8 @@ export function validateConfig(c: Config = config): string[] {
     errors.push(`CAPTURE_SOURCE "${c.integrations.capture}" is not one of ${VALID.capture.join(", ")}`);
   if (!VALID.lms.includes(c.integrations.lms))
     errors.push(`LMS_CONNECTOR "${c.integrations.lms}" is not one of ${VALID.lms.join(", ")}`);
+  if (!VALID.email.includes(c.integrations.email))
+    errors.push(`EMAIL_PROVIDER "${c.integrations.email}" is not one of ${VALID.email.join(", ")}`);
 
   const { confidenceFlagThreshold: t, assetAutoHoldFlagRatio: r } = c.quality;
   if (!(t >= 0 && t <= 1)) errors.push(`CONFIDENCE_FLAG_THRESHOLD must be in [0,1], got ${t}`);
@@ -144,6 +175,14 @@ export function validateConfig(c: Config = config): string[] {
     errors.push("CAPTURE_SOURCE=zoom but ZOOM_ACCOUNT_ID/ZOOM_CLIENT_ID/ZOOM_CLIENT_SECRET are not all set");
   if (c.integrations.lms === "slack" && !c.integrations.slack.webhookUrl)
     errors.push("LMS_CONNECTOR=slack but SLACK_WEBHOOK_URL is empty");
+  if (c.integrations.email === "resend" && !(c.integrations.resend.apiKey && c.integrations.resend.from))
+    errors.push("EMAIL_PROVIDER=resend but RESEND_API_KEY / EMAIL_FROM are not both set");
+  if (c.integrations.lms === "canvas") {
+    if (!c.integrations.canvas.baseUrl || !c.integrations.canvas.accessToken)
+      errors.push("LMS_CONNECTOR=canvas but CANVAS_BASE_URL / CANVAS_ACCESS_TOKEN are not both set");
+    else if (!/^https:\/\//i.test(c.integrations.canvas.baseUrl))
+      errors.push("CANVAS_BASE_URL must start with https:// (the access token is sent to it)");
+  }
 
   return errors;
 }

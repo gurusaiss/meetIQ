@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ZoomCaptureSource, getCaptureSource } from "../src/integrations/capture.ts";
-import { SlackLmsConnector, getLmsConnector } from "../src/integrations/lms.ts";
+import { SlackLmsConnector, CanvasLmsConnector, markdownToHtml, getLmsConnector } from "../src/integrations/lms.ts";
 import type { LmsItem } from "../src/integrations/lms.ts";
 
 /** Minimal fetch stub: a queue of responses, and a record of every call made. */
@@ -144,4 +144,91 @@ test("getLmsConnector('slack') requires credentials to be supplied", () => {
   assert.throws(() => getLmsConnector("slack"), /no credentials/);
   const slack = getLmsConnector("slack", { webhookUrl: "https://hooks.slack.com/services/x" });
   assert.equal(slack.name, "slack");
+});
+
+// ── Canvas LMS connector ────────────────────────────────────────────
+
+const CANVAS = { baseUrl: "https://school.instructure.com/", accessToken: "canvas-token" };
+const NOTES: LmsItem = {
+  lectureId: "CS101_week 1",
+  type: "notes",
+  title: "CS101_week 1 — Revision Notes",
+  body: "# Notes\n\n## Hashing  _(@0:10)_\n\n- Collisions are resolved by chaining _(cite: seg-2)_",
+  contentType: "text/markdown",
+};
+
+test("Canvas: refuses to construct without credentials, or over plain http", () => {
+  assert.throws(() => new CanvasLmsConnector({ baseUrl: "", accessToken: "t" }));
+  assert.throws(() => new CanvasLmsConnector({ baseUrl: "https://x.edu", accessToken: "" }));
+  assert.throws(() => new CanvasLmsConnector({ baseUrl: "http://x.edu", accessToken: "t" }), /https/);
+});
+
+test("Canvas: PUTs a stable-slug page with a Bearer token, so re-publishing updates in place", async () => {
+  const { impl, calls } = fetchStub([{ status: 200, json: {} }]);
+  const canvas = new CanvasLmsConnector(CANVAS, impl);
+  const n = await canvas.publish("12345", [NOTES]);
+
+  assert.equal(n, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.init?.method, "PUT");
+  assert.equal(calls[0]!.url, "https://school.instructure.com/api/v1/courses/12345/pages/meetiq-cs101-week-1-notes");
+  assert.equal((calls[0]!.init?.headers as Record<string, string>).authorization, "Bearer canvas-token");
+  const form = calls[0]!.init!.body as URLSearchParams;
+  assert.equal(form.get("wiki_page[title]"), NOTES.title);
+  assert.equal(form.get("wiki_page[published]"), "true");
+  assert.match(form.get("wiki_page[body]")!, /<h2>Hashing  <em>\(@0:10\)<\/em><\/h2>/);
+  assert.equal(canvas.published.length, 1);
+});
+
+test("Canvas: a non-numeric course id is sent as an SIS course id", async () => {
+  const { impl, calls } = fetchStub([{ status: 200 }]);
+  await new CanvasLmsConnector(CANVAS, impl).publish("CS101-2026S", [NOTES]);
+  assert.match(calls[0]!.url, /\/courses\/sis_course_id%3ACS101-2026S\/pages\//);
+});
+
+test("Canvas: falls back to an explicit create when the page does not exist yet (404 on PUT)", async () => {
+  const { impl, calls } = fetchStub([{ status: 404, text: "not found" }, { status: 200 }]);
+  const n = await new CanvasLmsConnector(CANVAS, impl).publish("12345", [NOTES]);
+  assert.equal(n, 1);
+  assert.deepEqual(calls.map((c) => c.init?.method), ["PUT", "POST"]);
+  assert.equal(calls[1]!.url, "https://school.instructure.com/api/v1/courses/12345/pages");
+});
+
+test("Canvas: a rejection (bad token) throws and is not counted as published", async () => {
+  const { impl } = fetchStub([{ status: 401, text: "Invalid access token" }]);
+  const canvas = new CanvasLmsConnector(CANVAS, impl);
+  await assert.rejects(() => canvas.publish("12345", [NOTES]), /Canvas rejected notes.*401/);
+  assert.equal(canvas.published.length, 0);
+});
+
+test("Canvas: flashcard CSV goes into a <pre>, escaped", async () => {
+  const { impl, calls } = fetchStub([{ status: 200 }]);
+  const csv: LmsItem = { ...NOTES, type: "flashcards", contentType: "text/csv", body: '"What is <b>x</b>?","A & B"\n' };
+  await new CanvasLmsConnector(CANVAS, impl).publish("12345", [csv]);
+  const body = (calls[0]!.init!.body as URLSearchParams).get("wiki_page[body]")!;
+  assert.match(body, /^<pre>/);
+  assert.match(body, /&lt;b&gt;x&lt;\/b&gt;/);
+  assert.match(body, /A &amp; B/);
+});
+
+test("markdownToHtml escapes transcript-derived text so it cannot inject markup", () => {
+  const html = markdownToHtml('- <script>alert(1)</script> and <img src=x onerror=alert(1)>\n- **bold** & "quoted"');
+  assert.equal(html.includes("<script>"), false);
+  assert.equal(html.includes("<img"), false);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /<strong>bold<\/strong> &amp; &quot;quoted&quot;/);
+  assert.match(html, /^<ul>\n<li>.*<\/li>\n<li>.*<\/li>\n<\/ul>$/s);
+});
+
+test("markdownToHtml handles headings, checkboxes, rules and does not italicise snake_case ids", () => {
+  const html = markdownToHtml("# my_lecture_1 — Notes\n\n- [ ] ship it — **Ana**\n\n---\n\nplain");
+  assert.match(html, /<h1>my_lecture_1 — Notes<\/h1>/);
+  assert.match(html, /<li>☐ ship it — <strong>Ana<\/strong><\/li>/);
+  assert.match(html, /<hr>/);
+  assert.match(html, /<p>plain<\/p>/);
+});
+
+test("getLmsConnector('canvas') requires credentials to be supplied", () => {
+  assert.throws(() => getLmsConnector("canvas"), /no credentials/);
+  assert.equal(getLmsConnector("canvas", undefined, CANVAS).name, "canvas");
 });

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIdentity, hasRole } from "../../../../lib/auth.ts";
-import { getRepo, getService, getLms, EXTERNAL_COURSE } from "../../../../lib/singletons.ts";
+import { getRepo, getService, getLms, LMS_COURSE_ID } from "../../../../lib/singletons.ts";
 import { forbidResponse, htmlError } from "../../../../lib/http.ts";
 
 export async function POST(
@@ -15,9 +15,11 @@ export async function POST(
   const lecture = await getRepo().getLecture(identity!.institutionId, lectureId);
   if (!lecture) return htmlError(404, "<h1>Lecture not found</h1>");
 
+  // Publish to the LMS course that belongs to the lecture's own course (not whichever course the publisher is viewing).
+  const course = await getRepo().getCourse(identity!.institutionId, lecture.courseId);
   let count: number;
   try {
-    count = await getService().publishToLms(identity!.institutionId, lectureId, lms, EXTERNAL_COURSE, identity!);
+    count = await getService().publishToLms(identity!.institutionId, lectureId, lms, course?.externalId || LMS_COURSE_ID, identity!);
   } catch (e) {
     console.error("lecture.publish.failed", lectureId, e);
     return htmlError(502, `<h1>Publishing failed</h1><div class="notice">The LMS connector did not accept the upload. Nothing was published.</div><p><a href="/lectures/${encodeURIComponent(lectureId)}/review">← Back to review</a></p>`);

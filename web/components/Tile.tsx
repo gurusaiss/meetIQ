@@ -16,6 +16,7 @@ const PATHS: Record<string, string> = {
   audit: "M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Zm-2.5 9 2 2 3.5-4",
   team: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 8a6 6 0 0 1 12 0M16.5 11a2.5 2.5 0 1 0 0-5M18 19a5 5 0 0 0-2.5-4.3",
   actions: "m4 7 2 2 3-3M4 14l2 2 3-3M10 7h10M10 14h10M10 20h6",
+  transcript: "M4 6h16M4 10h11M4 14h16M4 18h9",
 };
 
 export function Icon({ name }: { name: string }) {

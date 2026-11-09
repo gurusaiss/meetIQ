@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getSessions } from "../../../lib/singletons.ts";
 import { COOKIE_NAME } from "../../../lib/auth.ts";
 import { config } from "../../../../src/config.ts";
+import { setCourseCookie } from "../../../lib/course-cookie.ts";
 
 export async function POST(req: NextRequest) {
   const jar = await cookies();
@@ -15,5 +16,6 @@ export async function POST(req: NextRequest) {
     maxAge: 0,
     secure: config.security.secureCookies,
   });
+  setCourseCookie(res, null);
   return res;
 }

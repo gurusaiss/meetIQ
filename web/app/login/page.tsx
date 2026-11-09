@@ -16,11 +16,11 @@ const DEMO_ROLES = [
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; email?: string; reset?: string }>;
 }) {
   const identity = await getIdentity();
   if (identity) redirect("/");
-  const { error, email } = await searchParams;
+  const { error, email, reset } = await searchParams;
 
   return (
     <>
@@ -52,11 +52,15 @@ export default async function LoginPage({
 
         <div className="card" style={{ padding: 26 }}>
           <h2>Sign in</h2>
+          {reset && <div className="notice ok" role="status">Password updated. Sign in with your new password.</div>}
           {error && <div className="notice" role="alert">{error}</div>}
           <form action="/api/signin" method="post">
             <label htmlFor="in-email">Email</label>
             <input id="in-email" name="email" type="email" defaultValue={email ?? ""} required maxLength={254} autoComplete="email" />
-            <label htmlFor="in-pw">Password</label>
+            <div className="row" style={{ marginTop: 16 }}>
+              <label htmlFor="in-pw" style={{ margin: 0 }}>Password</label>
+              <a href="/forgot-password" className="kpi">Forgot password?</a>
+            </div>
             <input id="in-pw" name="password" type="password" required maxLength={200} autoComplete="current-password" />
             <div style={{ marginTop: 20 }}>
               <button className="btn big">Sign in →</button>

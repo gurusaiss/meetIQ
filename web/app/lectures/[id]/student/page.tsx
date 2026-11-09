@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getIdentity } from "../../../../lib/auth.ts";
-import { getRepo, getService } from "../../../../lib/singletons.ts";
+import { getRepo } from "../../../../lib/singletons.ts";
+import { releasedAssetsOr404 } from "../../../../lib/lectures.ts";
 import { AssetPanel } from "../../../../components/AssetPanel.tsx";
 
 export const metadata = { title: "Notes · MeetIQ" };
@@ -13,7 +14,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
   const lecture = await getRepo().getLecture(identity.institutionId, lectureId);
   if (!lecture) notFound();
 
-  const assets = await getService().studentAssets(identity.institutionId, lectureId);
+  const assets = await releasedAssetsOr404(identity, lectureId);
   const base = `/lectures/${encodeURIComponent(lectureId)}/export`;
   const exportHref: Record<string, string> = {
     notes: `${base}/notes.md`,
@@ -57,6 +58,7 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
 
       <p style={{ marginTop: 24 }}>
         <a className="btn small" href="/search">Search these sessions →</a>{" "}
+        <a className="btn small ghost" href={`/lectures/${encodeURIComponent(lectureId)}/transcript`}>Transcript &amp; captions</a>{" "}
         <a className="btn small ghost" href="/">← Dashboard</a>
       </p>
     </>

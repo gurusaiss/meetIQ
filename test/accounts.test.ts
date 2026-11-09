@@ -37,8 +37,25 @@ test("sector catalogue: permissions come from base roles, never from titles", ()
     assert.equal(new Set(s.roles.map((r) => r.id)).size, s.roles.length, "unique role ids");
   }
   assert.equal(getSectorRole("uni", "dean")?.base, "admin");
+  assert.equal(getSectorRole("uni", "ta")?.base, "ta");
+  assert.ok(selectableRoles(SECTORS.find((s) => s.id === "uni")!, "join").some((r) => r.id === "ta"), "a TA can join a university");
+  assert.equal(selectableRoles(SECTORS.find((s) => s.id === "uni")!, "create").some((r) => r.id === "ta"), false, "but cannot create one");
   assert.equal(getSectorRole("law", "auditor")?.base, "auditor");
   assert.equal(getSectorRole("org", "hr")?.base, "ta");
+});
+
+test("a university TA joins with the 'ta' permission role: can review, but is not an admin", async () => {
+  const { accounts } = make();
+  const owner = await create(accounts);
+  const code = await accounts.inviteCodeFor(owner);
+  const ta = await accounts.signUp({
+    mode: "join", sector: "uni", roleId: "ta", name: "Tia", email: "tia@x.test", password: PW, joinCode: code!,
+  });
+  assert.equal(ta.role, "ta");
+  assert.equal(ta.profile, "ta");
+  assert.equal(ta.institutionId, owner.institutionId);
+  assert.equal(ta.owner, false);
+  assert.equal(await accounts.inviteCodeFor(ta), null, "a TA never sees the invite code");
 });
 
 test("create makes an owner-admin org with an invite code; join adds a lower role in the same tenant", async () => {

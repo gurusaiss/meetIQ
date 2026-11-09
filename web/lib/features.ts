@@ -23,6 +23,7 @@ export const TOOL_TILES: Tile[] = [
   { key: "flowchart", title: "Flowchart", desc: "The session as a step-by-step topic flow." },
   { key: "slides", title: "PPT slides", desc: "Download a PowerPoint deck of the verified notes." },
   { key: "actions", title: "Decisions & action items", desc: "Who owns what, cited to the exact moment it was agreed." },
+  { key: "transcript", title: "Transcript & captions", desc: "Timestamped transcript with SRT/VTT caption downloads." },
   { key: "search", title: "Search", desc: "Ask questions across every input, with timestamps." },
 ];
 
@@ -79,6 +80,12 @@ export function noun(identity: Identity, plural = false): string {
   return plural ? n.many : n.one;
 }
 
+/** "course" / "courses", "matter" / "matters"... for the group of recordings in this person's organisation. */
+export function groupNoun(identity: Identity, plural = false): string {
+  const n = getSector(identity.sector)?.groupNoun ?? { one: "course", many: "courses" };
+  return plural ? n.many : n.one;
+}
+
 export function toolHref(tool: string, lectureId: string, canManage: boolean): string {
   const id = encodeURIComponent(lectureId);
   switch (tool) {
@@ -89,6 +96,8 @@ export function toolHref(tool: string, lectureId: string, canManage: boolean): s
       return canManage ? `/lectures/${id}/review#${tool}` : `/lectures/${id}/student#${tool}`;
     case "flowchart":
       return `/lectures/${id}/flowchart`;
+    case "transcript":
+      return `/lectures/${id}/transcript`;
     case "slides":
       return `/lectures/${id}/slides`;
     default:
